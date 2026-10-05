@@ -29,7 +29,11 @@ runs:
       run: npm run icon
     - name: Prepare official overlay toolchain
       shell: pwsh
-      run: npm run overlay:prepare
+      # Use the runner's PowerShell 7 for downloads; preserve the exact
+      # upstream preparation script, URLs and archive checksum validation.
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        & ./scripts/prepare-overlay.ps1
     - name: Build official overlay
       shell: pwsh
       run: npm run overlay:build
