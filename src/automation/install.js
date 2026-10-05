@@ -129,7 +129,7 @@ async function runSmartInstall(options, deps = {}) {
     });
   }
 
-  // 6. Success: record LKG and move to WAITING_FOR_VERIFICATION.
+  // 6. Success: record a candidate and wait for runtime verification.
   const replaced = result.replaced != null ? result.replaced : (manifest ? manifest.replaced.length : 0);
   const added = result.added != null ? result.added : (manifest ? manifest.added.length : 0);
   const loader = deps.loader || 'dxgi';

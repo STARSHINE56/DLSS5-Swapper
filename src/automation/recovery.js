@@ -23,10 +23,26 @@ function key(gameDir) {
 }
 
 function readStore(userData) {
+  let data;
   try {
-    const data = JSON.parse(fs.readFileSync(storeFile(userData), 'utf8'));
-    if (data && typeof data === 'object' && data.version === 1) return data;
+    data = JSON.parse(fs.readFileSync(storeFile(userData), 'utf8'));
   } catch { /* first run or corrupt file - start fresh */ }
+  if (data && typeof data === 'object' && data.version === 1 && data.games) {
+    let migrated = false;
+    for (const state of Object.values(data.games)) {
+      if (state && state.lastKnownGood && !state.lastKnownGood.verifiedAt) {
+        // Keep every legacy record, including when a newer candidate exists.
+        if (state.pendingCandidate) state.legacyUnverifiedLastKnownGood = state.lastKnownGood;
+        else state.pendingCandidate = { ...state.lastKnownGood, installedAt: state.lastInstall?.at || state.updatedAt || new Date().toISOString() };
+        state.lastKnownGood = null;
+        migrated = true;
+      }
+    }
+    // A failed migration write must propagate, never replace existing data
+    // with an empty store on the next mutation.
+    if (migrated) writeStore(userData, data);
+    return data;
+  }
   return { version: 1, games: {} };
 }
 
@@ -74,6 +90,7 @@ function beginInstall(gameDir, plan, deps = {}) {
   };
   patchGameState(gameDir, {
     verifyState: STATES.INSTALLING,
+    pendingCandidate: null,
     route: plan ? plan.recommendedRoute : null,
     mode: plan ? plan.mode : null,
     lastInstall: entry
@@ -87,9 +104,8 @@ function componentVersionsFromPlan(plan) {
   return versions;
 }
 
-// Success: record Last Known Good, append history, move to
-// WAITING_FOR_VERIFICATION. The LKG is only replaced after a verified-good
-// install; a failed attempt never overwrites it.
+// File installation only creates a candidate. Runtime SUCCESS is required
+// before replacing the last verified configuration.
 function completeInstall(gameDir, plan, manifest, deps = {}) {
   const now = new Date().toISOString();
   const entry = {
@@ -107,7 +123,8 @@ function completeInstall(gameDir, plan, manifest, deps = {}) {
     componentVersions: componentVersionsFromPlan(plan),
     config: deps.config || {},
     dllHashes: deps.dllHashes || {},
-    verifiedAt: null
+    verifiedAt: null,
+    installedAt: now
   };
   const state = readGameState(gameDir, deps) || {};
   const history = state.installHistory || [];
@@ -116,7 +133,8 @@ function completeInstall(gameDir, plan, manifest, deps = {}) {
     verifyState: STATES.WAITING_FOR_VERIFICATION,
     route: lkg.route,
     loader: lkg.loader,
-    lastKnownGood: lkg,
+    lastKnownGood: state.lastKnownGood || null,
+    pendingCandidate: lkg,
     lastInstall: entry,
     installHistory: history.slice(-50)
   }, deps);
@@ -139,6 +157,7 @@ function failInstall(gameDir, plan, error, rolledBack, deps = {}) {
   history.push(entry);
   patchGameState(gameDir, {
     verifyState: rolledBack ? STATES.ROLLED_BACK : STATES.FAILED,
+    pendingCandidate: null,
     lastInstall: entry,
     installHistory: history.slice(-50)
   }, deps);
@@ -156,11 +175,15 @@ function setVerifyState(gameDir, verifyState, extra = {}, deps = {}) {
   return patchGameState(gameDir, { verifyState, ...extra }, deps);
 }
 
-function touchLkgVerified(gameDir, verifiedAt, deps = {}) {
+function recordVerification(gameDir, verification, deps = {}) {
   const state = readGameState(gameDir, deps);
-  if (!state || !state.lastKnownGood) return state;
-  const lkg = { ...state.lastKnownGood, verifiedAt };
-  return patchGameState(gameDir, { lastKnownGood: lkg }, deps);
+  if (!state || !state.pendingCandidate || state.verifyState === STATES.INSTALLING) return state;
+  const patch = { verifyState: verification.state, lastVerification: verification };
+  if (verification.verdict === 'SUCCESS' && verification.route === state.pendingCandidate.route) {
+    patch.lastKnownGood = { ...state.pendingCandidate, verifiedAt: new Date().toISOString() };
+    patch.pendingCandidate = null;
+  }
+  return patchGameState(gameDir, patch, deps);
 }
 
 // Rollback through the official Restore Originals. Returns the new state.
@@ -180,6 +203,7 @@ async function rollbackInstall(gameDir, deps = {}) {
   history.push(entry);
   patchGameState(gameDir, {
     verifyState: STATES.ROLLED_BACK,
+    pendingCandidate: null,
     route: null,
     loader: null,
     lastInstall: entry,
@@ -193,7 +217,7 @@ async function rollbackInstall(gameDir, deps = {}) {
 // returns to WAITING_FOR_VERIFICATION.
 async function restoreLastKnownGood(gameDir, options, deps = {}) {
   const state = readGameState(gameDir, deps);
-  if (!state || !state.lastKnownGood) {
+  if (!state || !state.lastKnownGood || !state.lastKnownGood.verifiedAt) {
     return { ok: false, code: 'errNoLastKnownGood', state: readGameState(gameDir, deps) };
   }
   const lkg = state.lastKnownGood;
@@ -211,9 +235,9 @@ async function restoreLastKnownGood(gameDir, options, deps = {}) {
     return { ok: false, ...result, state: readGameState(gameDir, deps) };
   }
   const manifest = result.manifest;
-  const lkgNow = completeInstall(gameDir, { recommendedRoute: lkg.route, mode: state.mode || 'auto', components: [] },
+  completeInstall(gameDir, { recommendedRoute: lkg.route, mode: state.mode || 'auto', components: [] },
     manifest, { ...deps, loader: lkg.loader || 'dxgi', dllHashes: result.dllHashes || {} });
-  return { ok: true, state: readGameState(gameDir, deps), lastKnownGood: lkgNow };
+  return { ok: true, state: readGameState(gameDir, deps), lastKnownGood: lkg };
 }
 
 // Component version management: what the app carries vs what is beside the
@@ -248,6 +272,6 @@ function componentStatus(gameDir, deps = {}) {
 
 module.exports = {
   readGameState, patchGameState, setGameMode, beginInstall, completeInstall,
-  failInstall, recordRepair, setVerifyState, touchLkgVerified, rollbackInstall,
+  failInstall, recordRepair, setVerifyState, recordVerification, rollbackInstall,
   restoreLastKnownGood, componentStatus, readStore, writeStore, key
 };

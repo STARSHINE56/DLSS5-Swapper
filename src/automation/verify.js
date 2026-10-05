@@ -77,7 +77,10 @@ function routeEngaged(logs, route) {
 function verifyInstallation(gameDir, planData, deps = {}) {
   const exeDir = deps.exeDir || gameDir;
   const route = (planData && planData.recommendedRoute) || (deps.route) || null;
-  const logs = GAME_LOGS.map(name => logInfo(exeDir, name)).filter(Boolean);
+  // Old logs from configuration A cannot verify newly installed B.
+  const installedAt = deps.installedAt ? Date.parse(deps.installedAt) : null;
+  const logs = GAME_LOGS.map(name => logInfo(exeDir, name)).filter(Boolean)
+    .filter(log => !installedAt || Date.parse(log.modifiedTime) > installedAt);
   const findings = parseLogs(logs);
   const engaged = route ? routeEngaged(logs, route) : false;
   const newest = logs.reduce((m, l) => (l.modifiedTime > m ? l.modifiedTime : m), '');
@@ -190,7 +193,7 @@ async function safeAutoRepair(gameDir, repairId, options, deps = {}) {
   const current = deps.loader || 'dxgi';
   const targetLoader = current === 'd3d11' ? 'dxgi' : 'd3d11';
   recovery.recordRepair(gameDir, { repairId, from: current, to: targetLoader, result: 'started' }, { userData });
-  recovery.setVerifyState(gameDir, STATES.INSTALLING, {}, { userData });
+  recovery.setVerifyState(gameDir, STATES.INSTALLING, { pendingCandidate: null }, { userData });
   send({ code: 'autoRepairing', params: { repairId, from: current, to: targetLoader } });
   try {
     const result = await deps.install({
@@ -210,7 +213,8 @@ async function safeAutoRepair(gameDir, repairId, options, deps = {}) {
       recovery.recordRepair(gameDir, { repairId, from: current, to: targetLoader, result: 'failed', error: result && result.code }, { userData });
       return outcome(false, STATES.FAILED, (result && result.code) || 'errRepairFailed', { gameDir });
     }
-    recovery.setVerifyState(gameDir, STATES.WAITING_FOR_VERIFICATION, { loader: targetLoader }, { userData });
+    recovery.completeInstall(gameDir, { recommendedRoute: options.route, components: [] }, result.manifest,
+      { userData, loader: targetLoader, dllHashes: result.dllHashes || {} });
     recovery.recordRepair(gameDir, { repairId, from: current, to: targetLoader, result: 'success' }, { userData });
     return outcome(true, STATES.WAITING_FOR_VERIFICATION, 'autoRepaired', { loader: targetLoader, gameDir });
   } catch (error) {
