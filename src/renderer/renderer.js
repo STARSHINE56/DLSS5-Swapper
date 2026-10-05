@@ -921,6 +921,220 @@ async function fillSheetCommunity(g, dir) {
   if (open) open.onclick = () => { closeSheet(); show('community'); window.communityUi?.openCard?.(card.key); };
 }
 
+const SMART_MODES = ['auto', 'stable', 'quality', 'performance', 'experimental'];
+const smartModeLabel = (m) => ({ auto: t('smartModeAuto'), stable: t('smartModeStable'), quality: t('smartModeQuality'), performance: t('smartModePerformance'), experimental: t('smartModeExperimental') }[m] || m);
+
+// The smart-install card shown on every game sheet. Ordinary users see the
+// recommendation and one button; the official manual controls stay below.
+function smartMarkup() {
+  return `
+    <div class="smart-card" id="smartCard" data-title="${esc(t('smartTitle'))}">
+      <header class="smart-head">
+        <b>${esc(t('smartTitle'))}</b><span class="smart-sub">${esc(t('smartSubtitle'))}</span>
+      </header>
+      <label class="smart-mode"><span>${esc(t('smartMode'))}</span>
+        <select id="smartMode">${SMART_MODES.map((m) => `<option value="${m}">${esc(smartModeLabel(m))}</option>`).join('')}</select>
+      </label>
+      <div class="smart-body" id="smartBody"><div class="pad" style="color:var(--dim)">…</div></div>
+      <div class="smart-actions">
+        <button class="btn-install" id="smartInstall" type="button">${esc(t('smartInstall'))}</button>
+        <button class="ghost sm" id="smartDetect" type="button">${esc(t('smartDetect'))}</button>
+        <button class="ghost sm" id="smartDiagnose" type="button">${esc(t('smartDiagnose'))}</button>
+        <button class="ghost sm" id="smartVerify" type="button">${esc(t('smartVerify'))}</button>
+        <button class="ghost sm" id="smartRecover" type="button">${esc(t('smartRecover'))}</button>
+      </div>
+      <div class="smart-notes" id="smartNotes"></div>
+    </div>`;
+}
+
+function smartStateText(state) {
+  return ({ not_installed: t('smartNotInstalled'), ready: t('smartReady'), installing: t('smartInstalling'),
+    waiting_for_verification: t('smartWaiting'), verifying: t('smartVerifying'), working: t('smartWorking'),
+    needs_attention: t('smartNeedsAttention'), failed: t('smartFailed'), rolled_back: t('smartRolledBack') }[state] || state || '—');
+}
+
+function smartConfidenceHtml(c) {
+  const tone = c === 'HIGH' ? 'on' : c === 'UNKNOWN' ? 'off' : '';
+  return `<span class="smart-tag${tone ? ' ' + tone : ''}">${esc(c || '—')}</span>`;
+}
+
+function smartRiskHtml(risk) {
+  const label = risk === 'high' ? t('smartRiskHigh') : risk === 'medium' ? t('smartRiskMedium') : t('smartRiskLow');
+  const tone = risk === 'high' ? 'off' : risk === 'medium' ? '' : 'on';
+  return `<span class="smart-tag${tone ? ' ' + tone : ''}">${esc(label)}</span>`;
+}
+
+function listHtml(items) {
+  return items && items.length ? `<ul class="smart-list">${items.map((i) => `<li>${esc(String(i))}</li>`).join('')}</ul>` : '';
+}
+
+function renderSmartBody(data, dir) {
+  const body = $('smartBody');
+  if (!body) return;
+  const rec = data && data.recommendation;
+  if (!data || !rec) {
+    body.innerHTML = `<div class="smart-err">${esc(t('smartRouteNone'))}</div>`;
+    return;
+  }
+  const state = data.state || null;
+  let html = '';
+  if (rec.blocked) {
+    html = `<div class="smart-block" role="alert"><b>${esc(t('smartBlocked'))}</b>` + listHtml(rec.warnings) + `</div>`;
+  } else {
+    html = `
+      <div class="smart-grid">
+        <div class="smart-cell"><span class="k">${esc(t('smartRoute'))}</span><span class="v on">${esc(rec.recommendedRoute || '—')}</span></div>
+        <div class="smart-cell"><span class="k">${esc(t('smartCompat'))}</span>${smartConfidenceHtml(rec.confidence)}</div>
+        <div class="smart-cell"><span class="k">${esc(t('smartRisk'))}</span>${smartRiskHtml(data.plan && data.plan.risk)}</div>
+        ${rec.multipass ? `<div class="smart-cell"><span class="k">${esc(t('smartMultipass'))}</span><span class="v">${rec.multipass}</span></div>` : ''}
+      </div>
+      ${rec.reasons && rec.reasons.length ? `<div class="smart-section"><b>${esc(t('smartReasons'))}</b>${listHtml(rec.reasons)}</div>` : ''}
+      ${rec.warnings && rec.warnings.length ? `<div class="smart-section warn"><b>${esc(t('smartWarnings'))}</b>${listHtml(rec.warnings)}</div>` : ''}
+      ${rec.fallbackRoutes && rec.fallbackRoutes.length ? `<div class="smart-section"><b>${esc(t('smartFallbacks'))}</b>${listHtml(rec.fallbackRoutes)}</div>` : ''}
+      ${rec.optionalRoutes && rec.optionalRoutes.length ? `<div class="smart-section"><b>${esc(t('smartOptional'))}</b>${listHtml(rec.optionalRoutes)}</div>` : ''}
+      ${data.plan ? smartPlanHtml(data.plan) : ''}
+    `;
+  }
+  body.innerHTML = html;
+  const notes = $('smartNotes');
+  if (notes) {
+    const stateLine = state ? `<div class="smart-state"><b>${esc(t('smartTitle'))} · ${esc(smartStateText(state.verifyState || state.route ? 'ready' : state.verifyState))}</b></div>` : '';
+    notes.innerHTML = stateLine;
+  }
+  wireSmartVerify(data, dir);
+}
+
+function smartPlanHtml(plan) {
+  const components = (plan.components || []).map((c) => `${c.name} ${c.version ? '(' + esc(c.version) + ')' : ''}`).join(' · ');
+  const replacements = (plan.replacements || []).map((r) => `${r.rel}${r.action ? ' — ' + r.action : ''}`).join('<br>');
+  const conflicts = (plan.conflicts || []).map((c) => c.name).join(', ');
+  return `
+    <details class="smart-plan"><summary>${esc(t('smartPlan'))}</summary>
+      <div class="smart-plan-body">
+        <div class="smart-cell"><span class="k">${esc(t('smartComponents'))}</span><span class="v">${esc(components || '—')}</span></div>
+        <div class="smart-cell"><span class="k">${esc(t('smartReplacements'))}</span><span class="v">${replacements || '—'}</span></div>
+        ${conflicts ? `<div class="smart-cell"><span class="k">${esc(t('smartConflicts'))}</span><span class="v off">${esc(conflicts)}</span></div>` : ''}
+        <div class="smart-cell"><span class="k">${esc(t('smartSteps'))}</span><span class="v">${esc((plan.steps || []).map((s) => s.step).join(' → '))}</span></div>
+      </div>
+      <div class="smart-hint">${esc(t('smartPlanHint'))}</div>
+    </details>`;
+}
+
+function renderDiagBody(diag, dir) {
+  const body = $('smartBody');
+  if (!body) return;
+  if (!diag || !diag.findings) { body.innerHTML = `<div class="smart-err">${esc(t('smartRepairNone'))}</div>`; return; }
+  const rows = diag.findings.map((f) => {
+    const tone = f.severity === 'error' ? ' off' : f.severity === 'warn' ? '' : ' on';
+    return `<div class="smart-diag${tone}"><b>${esc(f.what || '')}</b>${f.why ? `<span>${esc(f.why)}</span>` : ''}${f.suggestion ? `<span>${esc(f.suggestion)}</span>` : ''}</div>`;
+  }).join('');
+  const repair = diag.repairId
+    ? `<button class="btn-install sm" id="smartRepair" type="button">${esc(t('smartRepair'))}</button>`
+    : '';
+  body.innerHTML = `<div class="smart-diags">${rows}</div>${repair ? `<div class="smart-actions">${repair}</div>` : ''}`;
+  const btn = $('smartRepair');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const r = await window.lab.autoRepair(dir, diag.repairId);
+      jobLog(r.ok ? t('smartRepairApplied') : (r.message || r.code || 'failed'));
+    } catch (e) { jobLog(e.message); }
+    setTimeout(() => { if (sheetGame?.dir === dir) openSheet(dir, true); }, 400);
+  };
+}
+
+async function loadSmartCard(dir, pick) {
+  const card = $('smartCard');
+  if (!card) return;
+  const body = $('smartBody');
+  if (!body) return;
+  const mode = $('smartMode')?.value || 'auto';
+  body.innerHTML = '<div class="pad" style="color:var(--dim)">…</div>';
+  let data;
+  try {
+    const [plan, st] = await Promise.all([
+      window.lab.autoPlan(dir, mode, pick ? pick.path : null),
+      window.lab.autoState(dir).catch(() => null)
+    ]);
+    data = { ...plan, state: st };
+  } catch (e) {
+    body.innerHTML = `<div class="smart-err">${esc(e.message || String(e))}</div>`;
+    return;
+  }
+  renderSmartBody(data, dir);
+}
+
+function wireSmartVerify(data, dir) {
+  // A successful verify stamps the LKG; both buttons refresh the sheet after
+  // their job. Nothing here launches a game.
+  const verifyBtn = $('smartVerify');
+  if (verifyBtn && data && data.detection) verifyBtn.disabled = !data.detection.ok;
+}
+
+async function runSmartAction(kind, dir) {
+  if (jobRunning) return;
+  const pick = sheetDetails ? chosenExe(sheetDetails, dir) : null;
+  const mode = $('smartMode')?.value || 'auto';
+  jobLines = [];
+  jobLog('--- smart ' + kind + ' ---');
+  if (kind === 'verify' || kind === 'diagnose') {
+    // These are reads; the sheet body shows the outcome.
+    try {
+      const out = kind === 'verify' ? await window.lab.autoVerify(dir) : await window.lab.autoDiagnose(dir);
+      if (kind === 'verify') renderSmartBody({ detection: out, recommendation: { blocked: false, recommendedRoute: out.route || null, confidence: 'HIGH', warnings: [], reasons: [], fallbackRoutes: [], optionalRoutes: [], multipass: 1 }, plan: { risk: 'low', components: [], replacements: [], conflicts: [], steps: [] }, state: { verifyState: out.state } }, dir);
+      else renderDiagBody(out, dir);
+      if (out.verdict) jobLog('verdict: ' + out.verdict);
+    } catch (e) { jobLog(e.message); }
+    return;
+  }
+  jobRunning = true;
+  const btn = $('smartInstall');
+  if (btn) { btn.disabled = true; btn.textContent = t('smartInstalling'); }
+  let res;
+  try {
+    if (kind === 'install') res = await window.lab.autoInstall(dir, mode, exeChoice.get(dir) || null);
+    else res = await window.lab.autoRestoreLkg(dir);
+  } catch (e) { res = { ok: false, message: e.message }; }
+  jobRunning = false;
+  if (btn) { btn.disabled = false; btn.textContent = t('smartInstall'); }
+  if (res && res.ok) {
+    jobLog(kind === 'install'
+      ? `smart install done - ${res.replaced} replaced, ${res.added} added`
+      : t('smartLkgRestored'));
+    jobLog(t('smartVerifyAfterGame'));
+  } else {
+    const translated = res && res.code ? t(res.code) : null;
+    jobLog((res && (res.message || (translated && translated !== res.code ? translated : res.code))) || 'failed');
+  }
+  setTimeout(() => { if (sheetGame?.dir === dir) openSheet(dir, true); }, 400);
+}
+
+function wireSmart(dir, pick) {
+  const modeSelect = $('smartMode');
+  if (modeSelect) modeSelect.onchange = () => loadSmartCard(dir, pick);
+  const installBtn = $('smartInstall');
+  if (installBtn) installBtn.onclick = () => runSmartAction('install', dir);
+  const detectBtn = $('smartDetect');
+  if (detectBtn) detectBtn.onclick = () => loadSmartCard(dir, pick);
+  const diagnoseBtn = $('smartDiagnose');
+  if (diagnoseBtn) diagnoseBtn.onclick = () => runSmartAction('diagnose', dir);
+  const verifyBtn = $('smartVerify');
+  if (verifyBtn) verifyBtn.onclick = () => runSmartAction('verify', dir);
+  const recoverBtn = $('smartRecover');
+  if (recoverBtn) recoverBtn.onclick = () => runSmartAction('recover', dir);
+}
+
+// Theme 2 paints its own sheet; the smart card is appended to its main column
+// so the entry exists there too without rebuilding the theme.
+function injectSmartInto(root, dir, pick) {
+  const target = root || document.getElementById('sheet');
+  if (!target) return;
+  if (target.querySelector('#smartCard')) return;
+  target.insertAdjacentHTML('beforeend', smartMarkup());
+  wireSmart(dir, pick);
+  loadSmartCard(dir, pick);
+}
+
 async function openSheet(dir, keepLog = false) {
   if (jobRunning) return;
   const g = state.games.find((x) => x.dir === dir);
@@ -979,7 +1193,8 @@ async function openSheet(dir, keepLog = false) {
 
       ${exePicker(d, dir)}
       <div class="sheet-community" id="sheetCommunity" hidden></div>
-      ${installOptions(d, pick, dir)}
+      ${smartMarkup()}
+      <details class="smart-advanced" id="smartAdvanced"><summary>${esc(t('smartAdvanced'))}${pick && (d.antiCheatWarning || pick.antiCheatWarning) ? '<i class="smart-warn-mark" title="' + esc(t('antiCheatWarningTitle')) + '">⚠</i>' : ''}</summary>${installOptions(d, pick, dir)}</details>
 
       <div class="specs" data-title="${esc(t('sheetFacts'))}">
         ${showExeFact && pick ? spec(t('fExe'), esc(pick.rel.split(/[\/]/).pop()), null, pick.rel) : ''}
@@ -1005,7 +1220,10 @@ async function openSheet(dir, keepLog = false) {
       <div class="job" id="job" role="status" aria-live="polite" data-title="${esc(t('sheetActivity'))}">${esc(jobLines.join('\n') || t('jobReady'))}</div>
     </div>`;
 
-  if (modernSheet) window.theme2.wireSheet(sheetContext);
+  if (modernSheet) {
+    window.theme2.wireSheet(sheetContext);
+    injectSmartInto(document.querySelector('#sheet .gp-main'), dir, pick);
+  }
   $('sheetClose').onclick = closeSheet;
   // The same thing the right-click menu offers, put where somebody who has
   // just installed into a game is already looking.
@@ -1082,6 +1300,8 @@ async function openSheet(dir, keepLog = false) {
   };
   $('doInstall').onclick = () => runJob('install', dir);
   $('doRestore').onclick = () => runJob('restore', dir);
+  wireSmart(dir, pick);
+  loadSmartCard(dir, pick);
 }
 
 function wireExePicker(dir) {

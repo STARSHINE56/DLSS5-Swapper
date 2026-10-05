@@ -82,7 +82,66 @@ const catalog = {
     "cancel": "Cancel",
     "antiCheatContinue": "I understand the risks — Install anyway",
     "optiConfirm": "Install the optional OptiScaler DLSS-NR backend for this game?",
-    "runtimeDownload": "Open official Microsoft download"
+    "runtimeDownload": "Open official Microsoft download",
+    "smartTitle": "Smart Install",
+    "smartSubtitle": "Starshine Auto — detection, recommendation, safe deployment",
+    "smartMode": "Mode",
+    "smartModeAuto": "Automatic",
+    "smartModeStable": "Stable first",
+    "smartModeQuality": "Quality first",
+    "smartModePerformance": "Performance first",
+    "smartModeExperimental": "Experimental",
+    "smartModeHint": "Automatic picks from the real detection. Experimental may raise multipass and enables aggressive options - it can crash, black-screen, corrupt the image, drop performance, break the overlay or clash DLLs.",
+    "smartCompat": "Compatibility",
+    "smartConfidence": "Confidence",
+    "smartRisk": "Risk",
+    "smartRiskLow": "Low",
+    "smartRiskMedium": "Medium",
+    "smartRiskHigh": "High",
+    "smartRoute": "Recommended route",
+    "smartRouteNone": "No automatic route",
+    "smartReasons": "Why",
+    "smartWarnings": "Warnings",
+    "smartFallbacks": "Fallback routes",
+    "smartOptional": "Optional (not automatic)",
+    "smartDetect": "Re-detect",
+    "smartInstall": "Smart install",
+    "smartVerify": "Verify now",
+    "smartDiagnose": "Diagnose",
+    "smartRecover": "Recover",
+    "smartAdvanced": "Advanced",
+    "smartRestoreLkg": "Restore last known good",
+    "smartLkgNone": "No verified configuration saved yet.",
+    "smartPlan": "Install plan",
+    "smartPlanHint": "Review the plan, then confirm. A backup is created before anything is written.",
+    "smartSteps": "Steps",
+    "smartComponents": "Components",
+    "smartReplacements": "Replaced files",
+    "smartConflicts": "Conflicts",
+    "smartBlocked": "Smart install is stopped",
+    "smartNonRtx": "当前智能安装主要面向 NVIDIA RTX GPU。",
+    "smartAntiCheat": "检测到反作弊系统。修改游戏 DLL 可能导致游戏无法启动或账号风险，智能安装已停止。",
+    "smartUnknownDll": "发现未知代理 DLL，智能安装已停止。请在高级设置中检查该文件。",
+    "smartUnknownApi": "无法确定渲染 API，智能安装已停止。请在高级设置中手动选择。",
+    "smartExperimentalWarning": "实验功能可能导致：游戏崩溃、黑屏、画面异常、性能下降、Overlay 不工作、DLL 冲突。",
+    "smartNotTested": "等待验证",
+    "smartWaiting": "等待启动游戏后验证",
+    "smartWorking": "运行正常",
+    "smartPartial": "部分加载",
+    "smartFailed": "加载失败",
+    "smartRolledBack": "已回滚",
+    "smartNeedsAttention": "需要关注",
+    "smartInstalling": "正在安装…",
+    "smartReady": "准备就绪",
+    "smartNotInstalled": "未安装",
+    "smartRepair": "自动修复",
+    "smartRepairApplied": "已应用自动修复，等待启动游戏验证。",
+    "smartRepairNone": "没有可安全自动修复的问题。",
+    "smartVerifyAfterGame": "启动游戏后点击“验证”，智能安装会读取游戏真实日志。",
+    "smartSuccessWait": "安装完成。启动游戏后再来验证。",
+    "smartMultipass": "Multipass",
+    "smartLkg": "上次可用配置",
+    "smartLkgRestored": "已恢复上次可用配置，等待启动游戏验证。"
   },
   "ar": {
     "searchGames": "البحث عن لعبة",
@@ -412,6 +471,13 @@ function locale(code) {
 function strings(code) {
   const source = catalog[locale(code)];
   const result = { ...source };
+  // Every supported language owns every feature key. Keys added to the English
+  // catalog without a translation yet fall back to English instead of being
+  // dropped - renderer registration below relies on the key existing, and
+  // existing translations are never overwritten.
+  for (const key of Object.keys(catalog.en)) {
+    if (!Object.hasOwn(result, key)) result[key] = catalog.en[key];
+  }
   for (const [key, alias] of Object.entries(aliases)) if (!Object.hasOwn(result, key)) result[key] = source[alias];
   return result;
 }

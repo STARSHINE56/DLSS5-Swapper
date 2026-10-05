@@ -105,6 +105,17 @@ contextBridge.exposeInMainWorld('lab', {
   addonSave: (entry) => ipcRenderer.invoke('addon-save', entry),
   addonRemove: (file) => ipcRenderer.invoke('addon-remove', file),
   restoreGame: (dir) => ipcRenderer.invoke('restore', dir),
+  // ---- Starshine Auto (smart installer) ----
+  autoDetect: (dir, exePath) => ipcRenderer.invoke('auto-detect', dir, exePath),
+  autoRecommend: (dir, mode, exePath) => ipcRenderer.invoke('auto-recommend', dir, mode, exePath),
+  autoPlan: (dir, mode, exePath) => ipcRenderer.invoke('auto-plan', dir, mode, exePath),
+  autoInstall: (dir, mode, exePath) => ipcRenderer.invoke('auto-install', dir, mode, exePath),
+  autoVerify: (dir) => ipcRenderer.invoke('auto-verify', dir),
+  autoDiagnose: (dir) => ipcRenderer.invoke('auto-diagnose', dir),
+  autoRepair: (dir, repairId) => ipcRenderer.invoke('auto-repair', dir, repairId),
+  autoRestoreLkg: (dir) => ipcRenderer.invoke('auto-restore-lkg', dir),
+  autoState: (dir) => ipcRenderer.invoke('auto-state', dir),
+  autoComponents: (dir) => ipcRenderer.invoke('auto-components', dir),
   onJob: (handler) => ipcRenderer.on('job', (_e, event) => handler(event)),
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return null; } }
 });

@@ -1718,7 +1718,12 @@ async function exclusiveMutation(work) {
   finally { mutationBusy = false; }
 }
 
-ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) => exclusiveMutation(async () => {
+// One installer, two front doors. The manual Install button and the smart
+// installer (src/automation) share this flow so there is exactly one
+// installation/backup/transaction path. `opts.skipDialogs` is used by the
+// smart path, whose preflight has already answered (or refused) the same
+// questions; `opts.reshadeProxy` lets it pick the loader from detection.
+async function officialInstallFlow(event, dir, exePath, requestedRoute, requestedApi, opts = {}) {
   const p = payload();
   if (!p) return { ok: false, ...payloadMissing() };
   const scan = await scanGame(dir);
@@ -1763,6 +1768,9 @@ ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
   if (changed && (old.game.api === 'vulkan' || api === 'vulkan')) return { ok: false, code: 'errBackendVulkanSwitch' };
   let antiCheatAcknowledged = false;
   if (compatibility.hasAntiCheat(dir, target.path)) {
+    // The smart path refuses anti-cheat games in preflight; if one slipped
+    // through, refuse here too instead of silently acknowledging the risk.
+    if (opts.skipDialogs) return { ok: false, code: 'errAntiCheatConsent', message: 'Anti-cheat detected; smart install refuses this game.' };
     const answer = await dialog.showMessageBox(win, antiCheatWarning.dialogOptions(loadState().lang, dir, target.path));
     if (answer.response !== 1) return { ok: false, cancelled: true };
     antiCheatAcknowledged = true;
@@ -1792,16 +1800,18 @@ ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
     // is their decision to make, with both facts in front of them.
     const oldCard = gpu ? !guards.gpuModelSupported(gpu) : false;
     const oldDriver = gpu ? !guards.driverSupported(gpu) : false;
-    const confirmation = await dialog.showMessageBox(win, {
-      type: 'warning', title: 'OptiScaler DLSS-NR',
-      message: featureText('optiConfirm'),
-      detail: [gpu ? gpu.map(g => `${g.name} — ${g.driver}`).join('\n') : featureText('errOptiHardware'),
-        oldCard ? featureText('optiCardOld') : null,
-        oldDriver ? featureText('optiDriverOld') : null,
-        featureText('optiHint'), featureText('optiBridgeHint'), featureText('backendHint')].filter(Boolean).join('\n\n'),
-      buttons: [featureText('installOpti'), featureText('cancel')], defaultId: 1, cancelId: 1
-    });
-    if (confirmation.response !== 0) return { ok: false, cancelled: true };
+    if (!opts.skipDialogs) {
+      const confirmation = await dialog.showMessageBox(win, {
+        type: 'warning', title: 'OptiScaler DLSS-NR',
+        message: featureText('optiConfirm'),
+        detail: [gpu ? gpu.map(g => `${g.name} — ${g.driver}`).join('\n') : featureText('errOptiHardware'),
+          oldCard ? featureText('optiCardOld') : null,
+          oldDriver ? featureText('optiDriverOld') : null,
+          featureText('optiHint'), featureText('optiBridgeHint'), featureText('backendHint')].filter(Boolean).join('\n\n'),
+        buttons: [featureText('installOpti'), featureText('cancel')], defaultId: 1, cancelId: 1
+      });
+      if (confirmation.response !== 0) return { ok: false, cancelled: true };
+    }
     const missing = missingVCRuntime(64, path.dirname(target.path), process.env.SystemRoot, ['msvcp140_atomic_wait.dll']);
     if (missing.length) return { ok: false, code: 'runtimeRequiredHint', message: missing.join(', ') };
     send({ code: 'optiDownloading', params: {} });
@@ -1827,6 +1837,7 @@ ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
     for (const [bits, folder] of checks) {
       const missing = missingVCRuntime(bits, folder);
       if (missing.length) {
+        if (opts.skipDialogs) return { ok: false, code: 'runtimeRequiredHint', message: missing.join(', ') };
         const response = await dialog.showMessageBox(win, {
           type: 'warning', title: 'Microsoft Visual C++ Runtime',
           message: featureText('runtimeRequiredHint'),
@@ -1930,7 +1941,7 @@ ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
       // DirectX 11 inside dgVoodoo (#343). Not DirectX 12, which never loads
       // d3d11.dll, and not OptiScaler, which has no ReShade of its own.
       reshadeProxy: ['dxgi', 'd3d8', 'd3d9', 'ddraw'].includes(api) && target.apiLabel !== 'DirectX 12' && route !== 'optiscaler'
-        ? reshadeProxyPreference(loadState(), dir, target.path) : 'dxgi',
+        ? opts.reshadeProxy ?? reshadeProxyPreference(loadState(), dir, target.path) : opts.reshadeProxy ?? 'dxgi',
       installReShade: true,
       addMissingDlss: true,
       addStreamline: false,
@@ -1967,7 +1978,9 @@ ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
     try { require('./src/game-overlay').cleanupMissing(overlayLibrary(), dir); } catch {}
     return { ok: false, code: err.code, message: err.message };
   }
-}));
+}
+ipcMain.handle('install', (event, dir, exePath, requestedRoute, requestedApi) =>
+  exclusiveMutation(async () => officialInstallFlow(event, dir, exePath, requestedRoute, requestedApi, {})));
 
 ipcMain.handle('restore', (event, dir) => exclusiveMutation(async () => {
   let restoredManifest = null;
@@ -1991,3 +2004,133 @@ ipcMain.handle('restore', (event, dir) => exclusiveMutation(async () => {
     return { ok: false, code: err.code, message: err.message };
   }
 }));
+
+// ---------------------------------------------------------------------------
+// Starshine Auto - safe automated DLSS 5 deployment (IPC)
+// Everything below orchestrates the official installer; the automation layer
+// (src/automation) never writes a game file itself.
+// ---------------------------------------------------------------------------
+const automation = require('./src/automation');
+
+// Read-only, cheap to recompute, safe to call while the sheet is open.
+ipcMain.handle('auto-detect', (event, dir, exePath) =>
+  automation.detect({ gameDir: dir, exePath: exePath || null }));
+
+ipcMain.handle('auto-recommend', (event, dir, mode, exePath) => (async () => {
+  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  return { detection, recommendation: automation.recommend(detection, mode || 'auto') };
+})());
+
+// Full smart picture for the sheet: detection + recommendation + plan +
+// preflight, so the UI has one round trip per refresh.
+ipcMain.handle('auto-plan', (event, dir, mode, exePath) => (async () => {
+  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  const recommendation = automation.recommend(detection, mode || 'auto');
+  const plan = automation.buildPlan(detection, recommendation, mode || 'auto');
+  const preflight = automation.preflight(detection, recommendation, { payload: payload() });
+  return { detection, recommendation, plan, preflight };
+})());
+
+ipcMain.handle('auto-install', (event, dir, mode, exePath) => exclusiveMutation(async () => {
+  const userData = app.getPath('userData');
+  const send = (e) => event.sender.send('job', e);
+  const p = payload();
+  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  const recommendation = automation.recommend(detection, mode || 'auto');
+  const plan = automation.buildPlan(detection, recommendation, mode || 'auto');
+  // Reuse an existing d3d11 ReShade hook where present; the official sheet
+  // otherwise defaults to dxgi.
+  const loader = detection.reshade && detection.reshade.installed &&
+    String(detection.reshade.file || '').toLowerCase() === 'd3d11.dll' ? 'd3d11' : 'dxgi';
+  return automation.runInstall({ gameDir: dir, exePath: exePath || null, mode: mode || 'auto' }, {
+    userData, send, payload: p, detection, recommendation, plan, loader,
+    install: async (config) => officialInstallFlow(event, dir, config.exePath, config.route, config.api, {
+      skipDialogs: true,
+      reshadeProxy: config.reshadeProxy
+    }),
+    restore: async (gameDirToRestore) => backends.restore(gameDirToRestore, send)
+  });
+}));
+
+async function automationVerify(dir) {
+  const userData = app.getPath('userData');
+  const detection = await automation.detect({ gameDir: dir });
+  const state = automation.state(dir, { userData });
+  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
+  const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
+  const verify = automation.verify(dir, { recommendedRoute: route }, { exeDir, route });
+  if (verify.verdict === 'SUCCESS') {
+    try { require('./src/automation/recovery').touchLkgVerified(dir, new Date().toISOString(), { userData }); } catch {}
+  }
+  return verify;
+}
+
+ipcMain.handle('auto-verify', (event, dir) => automationVerify(dir));
+
+ipcMain.handle('auto-diagnose', (event, dir) => (async () => {
+  const userData = app.getPath('userData');
+  const detection = await automation.detect({ gameDir: dir });
+  const state = automation.state(dir, { userData });
+  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
+  const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
+  const verify = automation.verify(dir, { recommendedRoute: route }, { exeDir, route });
+  return automation.diagnose(dir, { recommendedRoute: route }, { exeDir, route, detection, verify });
+})());
+
+// Only reversible, low-risk repairs (see src/automation/verify.js).
+ipcMain.handle('auto-repair', (event, dir, repairId) => exclusiveMutation(async () => {
+  const userData = app.getPath('userData');
+  const detection = await automation.detect({ gameDir: dir });
+  const state = automation.state(dir, { userData });
+  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
+  const loader = state && state.loader ? state.loader
+    : (detection.reshade && detection.reshade.installed && String(detection.reshade.file || '').toLowerCase() === 'd3d11.dll' ? 'd3d11' : 'dxgi');
+  return automation.repair(dir, repairId, {
+    exePath: detection.exe ? detection.exe.path : null,
+    route: route || 'native',
+    api: detection.exe ? detection.exe.api : 'auto'
+  }, {
+    userData, loader,
+    send: (e) => event.sender.send('job', e),
+    install: async (config) => officialInstallFlow(event, dir, config.exePath, config.route, config.api, {
+      skipDialogs: true,
+      reshadeProxy: config.reshadeProxy
+    })
+  });
+}));
+
+ipcMain.handle('auto-restore-lkg', (event, dir) => exclusiveMutation(async () => {
+  const userData = app.getPath('userData');
+  const detection = await automation.detect({ gameDir: dir });
+  const send = (e) => event.sender.send('job', e);
+  return automation.restoreLastKnownGood(dir, {
+    exePath: detection.exe ? detection.exe.path : null,
+    api: detection.exe ? detection.exe.api : 'auto'
+  }, {
+    userData,
+    restore: async (d) => backends.restore(d, send),
+    installFlow: async (cfg) => {
+      const result = await officialInstallFlow(event, dir, cfg.exePath, cfg.route, cfg.api,
+        { skipDialogs: true, reshadeProxy: cfg.reshadeProxy || 'dxgi' });
+      return { ok: Boolean(result && result.ok), ...result };
+    }
+  });
+}));
+
+ipcMain.handle('auto-state', (event, dir) => automation.state(dir, { userData: app.getPath('userData') }) || null);
+
+ipcMain.handle('auto-components', (event, dir) => (async () => {
+  const userData = app.getPath('userData');
+  const p = payload();
+  const detection = await automation.detect({ gameDir: dir });
+  const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
+  const peMod = require('./src/core/pe');
+  const files = {};
+  const host = path.join(exeDir, 'host64');
+  const feedNv = path.join(host, 'nvngx_dlssnr.dll');
+  if (fs.existsSync(feedNv)) files.feeder = { version: peMod.getFileVersion(feedNv) };
+  const addon = path.join(exeDir, 'renodx-dlss5.addon64');
+  if (fs.existsSync(addon)) files.renodx = { version: peMod.getFileVersion(addon) };
+  if (fs.existsSync(path.join(exeDir, 'OptiScaler'))) files.optiscaler = { version: null };
+  return automation.components(dir, { userData, payload: p, exePath: detection.exe ? detection.exe.path : null, files });
+})());
