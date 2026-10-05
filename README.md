@@ -17,6 +17,20 @@
   <a href="https://buymeacoffee.com/rakanki911"><img height="20" src="https://cdn.buymeacoffee.com/buttons/v2/lato-yellow.png" alt="Buy me a coffee"></a>
 </p>
 
+## Starshine Auto (this fork)
+
+This is a **non-official fork** of [rakanki911/DLSS5-Swapper](https://github.com/rakanki911/DLSS5-Swapper). It keeps every official feature and adds a safe, automated deployment layer for ordinary users:
+
+- **Smart detection** — GPU (NVIDIA RTX), driver, rendering API and existing proxy DLLs are read from the real machine; `UNKNOWN` is reported as `UNKNOWN`, never guessed.
+- **Explainable recommendation** — the recommended route (Native RenoDX / DLSS5-Feeder / OptiScaler / Multipass) always comes with the reasons and warnings that led to it.
+- **Safe deployment** — preflight checks, a reviewable install plan, official transactional backup, verified downloads (pinned SHA256), and **Restore Originals** stays the single restore mechanism.
+- **Auto diagnosis & repair** — game logs are turned into plain language; only reversible, low-risk fixes are automated.
+- **Auto rollback & Last Known Good** — a failed install restores the previous state; one click brings back the last verified configuration, per game.
+
+> ⚠️ **Disclaimer:** this fork is **not affiliated with NVIDIA or any game developer**. Modifying game files can cause compatibility problems, be overwritten by game updates, or conflict with other mods. The smart installer stops automatically when anti-cheat, unknown proxy DLLs or online-competitive games are detected — it never bypasses protection.
+
+The official README below is unchanged; all credit for the original project stays with its author and contributors.
+
 ## Download
 
 [**Windows Installer**](https://github.com/rakanki911/DLSS5-Swapper/releases/latest) ·

@@ -1,0 +1,247 @@
+/* ============================================================================
+   style-starshine.css — Starshine Auto UI polish overlay
+   Loaded after style.css / theme2.css. Adds visual depth (radius, shadow,
+   glow, motion) to the official Classic skin without touching official rules
+   or the Aperture skin: theme2.css scopes everything to :root[data-skin="two"],
+   and every rule below uses neutral selectors with lower specificity, so the
+   Aperture layout stays exactly as upstream designed it.
+   The official green accent and CSS variables are preserved.
+   ========================================================================== */
+
+:root {
+  --st-radius: 14px;
+  --st-radius-sm: 10px;
+  --st-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  --st-shadow-soft: 0 4px 14px rgba(0, 0, 0, .14);
+  --st-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 6px 22px color-mix(in srgb, var(--accent) 22%, transparent);
+  --st-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --st-edge: inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+:root[data-theme="light"] {
+  --st-shadow: 0 12px 32px rgba(28, 40, 54, .10);
+  --st-shadow-soft: 0 4px 14px rgba(28, 40, 54, .07);
+  --st-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 6px 20px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* ---------- global polish ---------- */
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: color-mix(in srgb, var(--text) 16%, transparent);
+}
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* ---------- background depth (Classic skin only wins where theme2 is absent) ---------- */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1100px 520px at 18% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    radial-gradient(900px 480px at 92% 108%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%);
+}
+.shell { position: relative; z-index: 1; }
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  border-radius: var(--st-radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(170deg, var(--glass), var(--panel));
+  box-shadow: var(--st-shadow-soft), var(--st-edge);
+  backdrop-filter: blur(10px);
+}
+.nav-item {
+  position: relative;
+  border-radius: 12px;
+  transition: background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.nav-item:hover { transform: translateX(2px); }
+.nav-item:active { transform: translateX(0) scale(.985); }
+.nav-item.active {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 5%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -6px;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 40%, transparent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* ---------- status card ---------- */
+.status-card {
+  border-radius: var(--st-radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--glass), color-mix(in srgb, var(--panel) 82%, transparent));
+  box-shadow: var(--st-shadow-soft), var(--st-edge);
+  transition: box-shadow .18s ease, border-color .18s ease;
+}
+.status-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.status-card .bar {
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.status-card .bar i {
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, transparent), var(--accent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------- buttons ---------- */
+.glass-btn, .ghost, .round, .pill, .tool, .link {
+  transition: transform .14s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease, color .16s ease;
+}
+.glass-btn:hover { transform: translateY(-1px); }
+.glass-btn:active, .ghost:active, .round:active, .pill:active { transform: translateY(1px); }
+.ghost:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.round:hover, .pill:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ---------- glass cards ---------- */
+.glass {
+  border-radius: var(--st-radius);
+  box-shadow: var(--st-shadow-soft), var(--st-edge);
+  transition: box-shadow .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+/* ---------- inputs ---------- */
+input[type="text"], input[type="search"], input[type="password"], select, textarea {
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+input[type="text"]:focus, input[type="search"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  box-shadow: var(--st-ring);
+  outline: none;
+}
+
+/* ---------- dropzone ---------- */
+.dropzone {
+  border-radius: 18px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--panel) 92%, transparent), var(--glass));
+  box-shadow: inset 0 0 0 1px var(--line), var(--st-shadow-soft);
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.dropzone:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)), var(--st-shadow); transform: translateY(-1px); }
+.dropzone.over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  box-shadow: var(--st-glow);
+}
+.dz-circle {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.dropzone:hover .dz-circle { transform: scale(1.05); }
+
+/* ---------- community cards ---------- */
+.community-card {
+  border-radius: var(--st-radius);
+  box-shadow: var(--st-shadow-soft), var(--st-edge);
+  transition: transform .2s cubic-bezier(.22, .9, .3, 1), border-color .2s ease, box-shadow .2s ease;
+}
+.community-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--accent) 12%, rgba(0, 0, 0, .18)), var(--st-edge);
+}
+
+/* ---------- game sheet ---------- */
+.sheet {
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .45), var(--st-edge);
+  backdrop-filter: blur(18px);
+}
+.sheet > header { border-radius: 20px 20px 0 0; }
+
+/* ---------- dialogs ---------- */
+.dialog, .community-dialog, .chat-dialog, .chat-viewer, .ol-dialog {
+  border-radius: 18px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .5), var(--st-edge);
+}
+.overlay .dialog { border-radius: 18px; }
+
+/* ---------- smart install card ---------- */
+.smart-card {
+  border-radius: 14px;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel) 55%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, var(--line)), var(--st-shadow-soft);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.smart-card:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)), 0 10px 26px color-mix(in srgb, var(--accent) 10%, transparent); }
+.smart-head b { letter-spacing: .2px; }
+.smart-tag { transition: background .16s ease, color .16s ease; }
+.smart-block {
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.smart-actions .btn-install.sm {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.smart-actions .btn-install.sm:hover { transform: translateY(-1px); }
+
+/* ---------- tiles / spec cells ---------- */
+.tile {
+  border-radius: 12px;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 8%, rgba(0, 0, 0, .12));
+  transform: translateY(-1px);
+}
+
+/* ---------- history rows ---------- */
+.hist-row, .log-row {
+  transition: background .14s ease;
+}
+.hist-row:hover, .log-row:hover { background: color-mix(in srgb, var(--text) 4%, transparent); border-radius: 8px; }
+
+/* ---------- community badges & verdicts ---------- */
+.community-kind {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+}
+.community-verdicts button {
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.community-verdicts button:hover { transform: translateY(-2px); }
+
+/* ---------- game filters ---------- */
+.game-filters label, .community-filters label { transition: border-color .16s ease; }
+.game-filters select:hover, .community-filters select:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+/* ---------- group heads ---------- */
+.group-head h4 { letter-spacing: .3px; }
+
+/* ---------- overlay panel preview (F8 lab) ---------- */
+.ol-static-panel { border-radius: 14px; }
+
+/* ---------- chat ---------- */
+.chat-messages .msg { transition: transform .14s ease; }
+.chat-messages .msg:hover { transform: translateY(-1px); }
+
+/* ---------- settings rows ---------- */
+.set-row { transition: background .14s ease, border-color .14s ease; }
+.set-row:hover { background: color-mix(in srgb, var(--text) 3%, transparent); border-radius: 10px; }
+
+/* ---------- reduce motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

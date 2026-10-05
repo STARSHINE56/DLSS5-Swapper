@@ -2738,3 +2738,46 @@ body { cursor: default; }
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+
+/* ------------------------------------------------------------------ */
+/* Starshine Auto - smart install card                                 */
+/* ------------------------------------------------------------------ */
+.smart-card { border: 1px solid var(--line, #2a2f3a); border-radius: 10px; padding: 12px 14px; margin: 10px 0 14px; background: var(--panel, #15181f); }
+.smart-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.smart-head b { font-size: 14px; }
+.smart-sub { color: var(--dim); font-size: 11px; }
+.smart-mode { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.smart-mode span { color: var(--dim); font-size: 12px; }
+.smart-mode select { max-width: 220px; }
+.smart-body { color: var(--fg, #e6e9ef); font-size: 13px; }
+.smart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.smart-cell { border: 1px solid var(--line, #2a2f3a); border-radius: 8px; padding: 6px 8px; }
+.smart-cell .k { display: block; color: var(--dim); font-size: 11px; }
+.smart-cell .v { font-size: 13px; word-break: break-all; }
+.smart-tag { font-size: 12px; padding: 1px 7px; border-radius: 9px; background: #232733; }
+.smart-tag.on { background: #16301f; color: #6fdb9b; }
+.smart-tag.off { background: #34181c; color: #f08a9a; }
+.smart-section { margin: 6px 0; }
+.smart-section b { display: block; color: var(--dim); font-size: 12px; margin-bottom: 3px; }
+.smart-section.warn b, .smart-block b { color: #e8b64c; }
+.smart-list { margin: 0; padding-left: 18px; }
+.smart-list li { margin: 2px 0; }
+.smart-block { border: 1px solid #7a4a2c; border-radius: 8px; padding: 8px 10px; background: #2a1d14; }
+.smart-block b { display: block; margin-bottom: 4px; }
+.smart-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.smart-actions .btn-install.sm { font-size: 12px; padding: 6px 12px; }
+.smart-notes { margin-top: 8px; color: var(--dim); font-size: 12px; }
+.smart-state b { font-size: 12px; }
+.smart-plan { margin-top: 8px; }
+.smart-plan summary { cursor: pointer; color: var(--accent, #6ea8ff); font-size: 12px; }
+.smart-plan-body { margin: 6px 0; }
+.smart-hint { color: var(--dim); font-size: 11px; margin-top: 4px; }
+.smart-diag { border-left: 3px solid #e8b64c; padding: 4px 8px; margin: 5px 0; }
+.smart-diag.off { border-color: #f08a9a; }
+.smart-diag.on { border-color: #6fdb9b; }
+.smart-diag b { display: block; font-size: 12.5px; }
+.smart-diag span { display: block; color: var(--dim); font-size: 12px; }
+.smart-err { color: #f08a9a; font-size: 12px; }
+.smart-advanced { margin: 8px 0 14px; border-top: 1px dashed var(--line, #2a2f3a); padding-top: 6px; }
+.smart-advanced summary { cursor: pointer; color: var(--dim); font-size: 12px; user-select: none; }
+.smart-warn-mark { font-style: normal; color: #e8b64c; margin-left: 4px; }

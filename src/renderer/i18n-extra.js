@@ -778,4 +778,29 @@ add({ code: 'ca', label: 'Catalan', native: 'Català', dir: 'ltr' }, {
   artFound: (a, b) => `Caràtules: ${a} de ${b}`, libReady: (n, d) => `Biblioteca a punt — ${n} jocs, ${d} amb DirectX 12`
 });
 
+// Starshine Auto — 简体中文补充翻译。
+// 以下键在官方 i18n.js 中仅提供英语/阿拉伯语（官方回归测试锁定），
+// 简体中文经由运行时注入补齐，不触碰官方语言包文件本身。
+Object.assign(window.i18n.S.zh, {
+  errNoWriteAccess: 'Windows 不允许此应用写入游戏文件夹，因此未做任何更改。安装于 Program Files 下的游戏受保护：请以管理员身份运行 DLSS 5 Swapper，或将游戏移动到其他文件夹。',
+  sheetCommunityTitle: '社区的发现',
+  overlayNotForRoute: (why, api) => `不会安装游戏内叠加层：${why === 'bits' ? '它仅适用于 64 位游戏，而此游戏为 32 位'
+    : why === 'multipass' ? 'multipass 路线在游戏内有自己的页面（按 Home）。叠加层适用于 Native DLSS（RenoDX）与 Feeder'
+    : why === 'optiscaler' ? 'OptiScaler 在游戏内有自己的菜单（按 Insert）。叠加层适用于 Native DLSS（RenoDX）与 Feeder'
+    : `它仅适用于 DirectX 11 和 12，而此游戏使用 ${api}`}。其余安装继续。`,
+  multipassNext: (dlss) => dlss === 'yes'
+    ? 'Multipass 已安装。在游戏中按 Home 打开 RenoDX DLSS 页（最后一个，不是 Home）：Pass Count 和所有其他设置都在那里。请在游戏设置中保持 DLSS 开启。'
+    : 'Multipass 已安装。在游戏中按 Home 打开 RenoDX DLSS 页（最后一个，不是 Home）。此游戏没有原生 DLSS，请关闭 Require DLSS 并将 Hook Method 设为 Present。Pass Count 在同一页。',
+  fReshadeFile: 'ReShade 文件',
+  reshadeProxyWrapHint: 'ReShade 以 d3d11.dll 而非 dxgi.dll 安装。此游戏通过 dgVoodoo 包装器访问 DirectX 11，在某些配置上该层只加载 d3d11.dll——如果游戏能启动但没有叠加层且未生成 ReShade.log，请尝试此项。',
+  reshadeProxyHint: 'ReShade 以 d3d11.dll 而非 dxgi.dll 安装。适用于忽略 dxgi.dll 的 DirectX 11 游戏。如果游戏已安装，点击「安装」即可切换文件。',
+  setSafeGraphicsHint: '如果窗口闪烁或不断残留之前的画面，请开启此项。它不使用显卡绘制。下次启动应用时生效。',
+  setSkins: '主题',
+  skinOne: '主题 1 · Classic',
+  skinTwo: '主题 2 · Aperture',
+  t2Play: '开始游戏',
+  t2Setup: 'DLSS 5 安装',
+  t2Search: '搜索游戏、启动器或文件夹…'
+});
+
 })();
