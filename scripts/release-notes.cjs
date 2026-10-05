@@ -1,0 +1,16 @@
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const { version } = require('../package.json');
+const log = fs.readFileSync(path.join(root, 'test-results.log'), 'utf8');
+const results = {};
+for (const match of log.matchAll(/(?:# |ℹ )(tests|pass|fail|skipped|cancelled) (\d+)/g)) results[match[1]] = Number(match[2]);
+if (!results.tests || results.fail !== 0 || results.cancelled !== 0 || !Number.isInteger(results.skipped)) throw new Error('Missing or failing test summary');
+if (results.skipped !== 2) throw new Error('Windows release expects only the two documented external-server skips');
+const template = fs.readFileSync(path.join(root, 'docs', 'releases', `v${version}-starshine-auto.md`), 'utf8');
+const notes = template.replace('{{PASSED}}', results.pass).replace('{{SKIPPED}}', results.skipped);
+if (/\{\{/.test(notes)) throw new Error('Unresolved release notes placeholders');
+fs.writeFileSync(path.join(root, 'dist', 'RELEASE_NOTES.md'), notes);
+fs.writeFileSync(path.join(root, 'dist', 'test-results.json'), JSON.stringify(results, null, 2));
+console.log(JSON.stringify(results));
