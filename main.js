@@ -1605,7 +1605,7 @@ ipcMain.handle('update-check', async () => {
   if (updateAnswer) return updateAnswer;
   const current = app.getVersion();
   try {
-    const response = await fetch('https://api.github.com/repos/rakanki911/DLSS5-Swapper/releases/latest', {
+    const response = await fetch('https://api.github.com/repos/STARSHINE56/DLSS5-Swapper/releases/latest', {
       headers: { 'User-Agent': `DLSS5-Swapper/${current}`, Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(8000)
     });
