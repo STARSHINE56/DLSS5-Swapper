@@ -7,7 +7,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 
-test('real IPC persists per-EXE choices, validates selection, uses effective routes and keeps Vulkan switch guards', async t => {
+// Expected skip outside Windows: these IPC fixtures exercise Windows installs without Proton.
+test('real IPC persists per-EXE choices, validates selection, uses effective routes and keeps Vulkan switch guards', { skip: process.platform !== 'win32' && 'Windows installer IPC fixture; validated by Windows CI' }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-api-ipc-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const game = path.join(root, 'Game');

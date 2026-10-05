@@ -90,3 +90,15 @@ test('a failed lookup is distinguishable from being up to date', () => {
   assert.match(renderer, /if \(!answer\.latest\) \{[\s\S]*updateCheckFailed/,
     'the renderer separates the two before it decides there is no news');
 });
+
+
+test('Starshine release suffix compares as the same stable version and uses fork endpoint', async t => {
+  for (const [tag, newer] of [['v2.2.10-starshine-auto', false], ['2.2.10', false],
+    ['v2.2.11-starshine-auto', true], ['v2.2.9-starshine-auto', false]]) {
+    const { handlers } = load(t, { version: '2.2.10', fetchImpl: async url => {
+      assert.equal(url, 'https://api.github.com/repos/STARSHINE56/DLSS5-Swapper/releases/latest');
+      return release(tag);
+    } });
+    assert.equal((await handlers.get('update-check')()).newer, newer, tag);
+  }
+});

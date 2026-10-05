@@ -4,13 +4,14 @@
 // portable build, a half-finished self-extraction into %TEMP%.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { missingPayload } = require('../src/core/payload-guidance');
 
 test('from source it still says the thing a developer needs', () => {
   const { code, message } = missingPayload({ packaged: false, appRoot: 'C:\\src\\app', resourcesPath: 'ignored' });
   assert.equal(code, 'errPayloadMissing');
   assert.match(message, /npm run payload/);
-  assert.ok(message.includes('C:\\src\\app\\payload'), message);
+  assert.ok(message.includes(path.join('C:\\src\\app', 'payload')), message);
 });
 
 test('an installed copy is told about antivirus, never about npm', () => {
@@ -35,5 +36,5 @@ test('a portable copy is told to delete the folder it re-extracts into', () => {
 
 test('without a temp path it still names the folder in a form a person can paste', () => {
   const { message } = missingPayload({ packaged: true, portable: true, appRoot: 'x', resourcesPath: 'y' });
-  assert.ok(message.includes('%TEMP%\\DLSS5-Swapper'), message);
+  assert.ok(message.includes(path.join('%TEMP%', 'DLSS5-Swapper')), message);
 });

@@ -41,7 +41,7 @@ function okInstallFlow(calls) {
   };
 }
 
-test('successful smart install records LKG and waits for game verification', async t => {
+test('successful smart install records a candidate and waits for game verification', async t => {
   const gameDir = temp(t);
   const userData = temp(t);
   const calls = [];
@@ -55,9 +55,9 @@ test('successful smart install records LKG and waits for game verification', asy
   assert.equal(r.route, 'native');
   const state = recovery.readGameState(gameDir, { userData });
   assert.equal(state.verifyState, 'waiting_for_verification');
-  assert.ok(state.lastKnownGood, 'LKG must be recorded');
-  assert.equal(state.lastKnownGood.route, 'native');
-  assert.equal(state.lastKnownGood.verifiedAt, null);
+  assert.equal(state.lastKnownGood, null);
+  assert.equal(state.pendingCandidate.route, 'native');
+  assert.equal(state.pendingCandidate.verifiedAt, null);
   assert.equal(state.installHistory.length, 1);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].config.antiCheatAcknowledged, false);
@@ -162,6 +162,7 @@ test('restoreLastKnownGood reinstalls the recorded route', async t => {
     userData, send: () => {}, payload: PAYLOAD, detection: baseDetection(gameDir),
     install: okInstallFlow(calls)
   });
+  recovery.recordVerification(gameDir, { verdict: 'SUCCESS', route: 'native', state: 'working' }, { userData });
   let restored = false;
   const r = await recovery.restoreLastKnownGood(gameDir, { exePath: path.join(gameDir, 'game.exe'), api: 'dxgi' }, {
     userData,
@@ -194,6 +195,7 @@ test('a failed attempt never overwrites the last known good', async t => {
     userData, send: () => {}, payload: PAYLOAD, detection: baseDetection(gameDir),
     install: async () => ({ ok: true, replaced: 1, added: 1 })
   });
+  recovery.recordVerification(gameDir, { verdict: 'SUCCESS', route: 'native', state: 'working' }, { userData });
   const before = recovery.readGameState(gameDir, { userData }).lastKnownGood;
   await install.runSmartInstall({ gameDir, mode: 'quality' }, {
     userData, send: () => {}, payload: PAYLOAD, detection: baseDetection(gameDir),

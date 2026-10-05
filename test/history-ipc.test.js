@@ -9,7 +9,8 @@ const { createRequire } = require('module');
 
 // Execute the real IPC handlers with fake installers, downloads and clipboard.
 // No game files, GPU, registry, real profile or system clipboard are touched.
-test('install/restore IPC records all backends, not failures/cancels, and validates clipboard writes', async t => {
+// Expected skip outside Windows: these IPC fixtures exercise Windows installs without Proton.
+test('install/restore IPC records all backends, not failures/cancels, and validates clipboard writes', { skip: process.platform !== 'win32' && 'Windows installer IPC fixture; validated by Windows CI' }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-history-ipc-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const main = path.resolve(__dirname, '../main.js');

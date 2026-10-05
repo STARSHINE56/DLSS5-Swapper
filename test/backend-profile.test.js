@@ -68,7 +68,7 @@ test('a tampered profile is still refused outright', (t) => {
   writeProfile(dir, exe, 'dxgi', 'native', { 'ReShade.ini': 'x'.repeat(4 * 1024 * 1024 + 1) });
   assert.throws(() => manager.loadProfile(config), /Invalid backend profile/, 'oversized');
 
-  writeProfile(dir, exe, 'dxgi', 'native', { '..\\..\\Windows\\System32\\evil.ini': '[GENERAL]\r\n' });
+  writeProfile(dir, exe, 'dxgi', 'native', { [path.join('..', '..', 'Windows', 'System32', 'evil.ini')]: '[GENERAL]\r\n' });
   assert.throws(() => manager.loadProfile(config), 'a path escaping the game folder');
 });
 

@@ -76,6 +76,18 @@ function game(t) {
 
 test('the install retires the stale compiler and Restore gives it back', async (t) => {
   const { gameDir, compiler, manifest, version } = game(t);
+  // The production guard requires a real System32 file, not only a version stub.
+  // Provide it in an isolated fixture instead of depending on the runner OS.
+  const systemRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'shader-system-'));
+  const previousRoot = process.env.SystemRoot;
+  process.env.SystemRoot = systemRoot;
+  fs.mkdirSync(path.join(systemRoot, 'System32'));
+  fs.writeFileSync(path.join(systemRoot, 'System32', 'D3DCompiler_47.dll'), 'system fixture');
+  t.after(() => {
+    if (previousRoot === undefined) delete process.env.SystemRoot;
+    else process.env.SystemRoot = previousRoot;
+    fs.rmSync(systemRoot, { recursive: true, force: true });
+  });
   const said = [];
   const acted = await retireOldShaderCompiler(manifest, gameDir, gameDir,
     (code, params) => said.push([code, params]), version);

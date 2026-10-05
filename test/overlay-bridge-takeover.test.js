@@ -50,7 +50,8 @@ async function bridge(t, idleTakeoverMs = 5000) {
   return live;
 }
 
-test('a game left holding the pipe does not lock every later game out', async (t) => {
+// Expected skip on non-Windows: this test uses Win32 named pipes, not Unix sockets.
+test('a game left holding the pipe does not lock every later game out', { skip: process.platform !== 'win32' && 'Requires Win32 named pipes' }, async (t) => {
   // A short takeover window keeps the test quick; the shipped one is 5 s.
   const live = await bridge(t, 400);
   assert.equal(live.state().listening, true);
@@ -78,7 +79,7 @@ test('a game left holding the pipe does not lock every later game out', async (t
   first.destroy(); third.destroy();
 });
 
-test('the bridge reports what it is doing', async (t) => {
+test('the bridge reports what it is doing', { skip: process.platform !== 'win32' && 'Requires Win32 named pipes' }, async (t) => {
   const live = await bridge(t);
   assert.deepEqual(
     { listening: live.state().listening, connected: live.state().connected, game: live.state().game },
