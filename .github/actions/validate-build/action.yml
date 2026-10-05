@@ -1,0 +1,51 @@
+name: Validate and build Starshine Auto
+description: Build Windows EXEs from this checkout and verify the shipped source
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - name: Install locked dependencies
+      shell: pwsh
+      run: npm ci
+    - name: Run complete tests
+      shell: pwsh
+      run: |
+        npm test 2>&1 | Tee-Object -FilePath test-results.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Verify Chinese translations
+      shell: pwsh
+      run: node scripts/verify-i18n-fix.cjs
+    - name: Verify release metadata and source
+      shell: pwsh
+      run: node scripts/verify-release-source.cjs
+    - name: Prepare pinned upstream runtime inputs
+      shell: pwsh
+      run: node scripts/prepare-release-inputs.cjs
+    - name: Generate application icon
+      shell: pwsh
+      run: npm run icon
+    - name: Prepare official overlay toolchain
+      shell: pwsh
+      run: npm run overlay:prepare
+    - name: Build official overlay
+      shell: pwsh
+      run: npm run overlay:build
+    - name: Build Windows installer and portable from source
+      shell: pwsh
+      env:
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      run: npm run build -- --publish never
+    - name: Verify final application package
+      shell: pwsh
+      run: |
+        node scripts/verify-package.cjs 2>&1 | Tee-Object -FilePath package-verification.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Generate SHA256 for actual EXEs
+      shell: pwsh
+      run: node scripts/release-assets.cjs
+    - name: Generate release notes with actual test statistics
+      shell: pwsh
+      run: node scripts/release-notes.cjs
