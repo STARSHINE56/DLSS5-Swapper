@@ -28,6 +28,8 @@ try {
     ['i18n.js lock keys en/ar only (2 each)', lockCount('errNoWriteAccess') === 2 && lockCount('t2Search') === 2 && lockCount('setSafeGraphicsHint') === 2],
     ['index.html style-starshine link', read('src/renderer/index.html').includes('style-starshine.css')],
     ['style-starshine.css packaged', fs.existsSync(path.join(tmp, 'src', 'renderer', 'style-starshine.css'))],
+    ['project links point at the fork', read('src/core/project-links.js').includes('STARSHINE56/DLSS5-Swapper') && !read('src/core/project-links.js').includes('rakanki911')],
+    ['sponsor block removed from About', !read('src/renderer/index.html').includes('buymeacoffee') && !read('src/renderer/index.html').includes('support-qr')],
   ];
   for (const [name, pass] of checks) {
     console.log(`${pass ? 'OK  ' : 'FAIL'} ${name}`);
