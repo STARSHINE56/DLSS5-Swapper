@@ -1,0 +1,110 @@
+name: Starshine Auto Release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (empty derives it from package.json)
+        required: false
+        type: string
+  push:
+    tags: ['v*-starshine-auto']
+permissions:
+  contents: read
+concurrency:
+  group: starshine-auto-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve immutable release tag
+        id: target
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        with:
+          script: |
+            const fs = require('fs');
+            const version = JSON.parse(fs.readFileSync('package.json')).version;
+            const tag = `v${version}-starshine-auto`;
+            if (!/^v\d+\.\d+\.\d+-starshine-auto$/.test(tag)) throw new Error('Not a stable version');
+            if (process.env.REQUESTED_TAG && process.env.REQUESTED_TAG !== tag) throw new Error('Tag/package version mismatch');
+            if (context.eventName === 'push' && context.ref !== `refs/tags/${tag}`) throw new Error('Tag/package version mismatch');
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            const releases = await github.paginate(github.rest.repos.listReleases, repo);
+            if (releases.some(r => r.tag_name === tag)) throw new Error('Release already exists; will not overwrite it');
+            let ref;
+            try { ref = await github.rest.git.getRef({ ...repo, ref: `tags/${tag}` }); }
+            catch (error) { if (error.status !== 404) throw error; }
+            if (!ref) {
+              // Manual dispatch may create the tag only after this exact main
+              // commit has passed the complete Windows CI build/package gate.
+              if (context.ref !== 'refs/heads/main') throw new Error('Create release tags from verified main only');
+              const runs = await github.rest.actions.listWorkflowRuns({ ...repo, workflow_id: 'ci.yml', head_sha: context.sha, status: 'completed', per_page: 100 });
+              if (!runs.data.workflow_runs.some(r => r.head_sha === context.sha && r.conclusion === 'success')) throw new Error('This exact commit has not passed Windows CI');
+              ref = await github.rest.git.createRef({ ...repo, ref: `refs/tags/${tag}`, sha: context.sha });
+            }
+            const commit = await github.rest.repos.getCommit({ ...repo, ref: tag });
+            if (commit.data.sha !== context.sha) throw new Error('Existing tag targets another commit; never moving it');
+            core.setOutput('tag', tag);
+            core.setOutput('sha', commit.data.sha);
+      - name: Clean checkout of corresponding tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+          fetch-depth: 0
+      - uses: ./.github/actions/validate-build
+      - name: Preserve release build and verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: starshine-auto-${{ steps.target.outputs.tag }}
+          path: |
+            dist/*-starshine-auto*.exe
+            dist/SHA256SUMS.txt
+            dist/release-assets.json
+            dist/test-results.json
+            dist/RELEASE_NOTES.md
+            test-results.log
+            package-verification.log
+          if-no-files-found: error
+      - name: Upload verified files then publish formal Release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.target.outputs.tag }}
+          RELEASE_SHA: ${{ steps.target.outputs.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            const version = JSON.parse(fs.readFileSync('package.json')).version;
+            const tag = process.env.RELEASE_TAG;
+            const old = await github.paginate(github.rest.repos.listReleases, repo);
+            if (old.some(r => r.tag_name === tag)) throw new Error('Release already exists; will not overwrite it');
+            const assets = JSON.parse(fs.readFileSync('dist/release-assets.json'));
+            const expected = [`DLSS5-Swapper-Setup-${version}-starshine-auto.exe`, `DLSS5-Swapper-${version}-starshine-auto-portable.exe`];
+            if (assets.length !== 2 || !expected.every(n => assets.some(a => a.name === n))) throw new Error('Incorrect EXE allowlist');
+            const checksum = fs.readFileSync('dist/SHA256SUMS.txt', 'utf8');
+            for (const a of assets) {
+              const data = fs.readFileSync(`dist/${a.name}`);
+              if (data.length !== a.size || crypto.createHash('sha256').update(data).digest('hex') !== a.sha256 || !checksum.includes(`${a.sha256}  ${a.name}\n`)) throw new Error('Build/checksum changed');
+            }
+            const release = await github.rest.repos.createRelease({ ...repo, tag_name: tag,
+              target_commitish: process.env.RELEASE_SHA,
+              name: `DLSS 5 Swapper Starshine Auto ${version}`,
+              body: fs.readFileSync('dist/RELEASE_NOTES.md', 'utf8'), draft: true, prerelease: false });
+            for (const name of [...expected, 'SHA256SUMS.txt']) {
+              const data = fs.readFileSync(`dist/${name}`);
+              const hash = crypto.createHash('sha256').update(data).digest('hex');
+              const uploaded = await github.rest.repos.uploadReleaseAsset({ ...repo, release_id: release.data.id, name,
+                data, headers: { 'content-type': name.endsWith('.exe') ? 'application/octet-stream' : 'text/plain', 'content-length': data.length } });
+              if (uploaded.data.size !== data.length || uploaded.data.digest !== `sha256:${hash}`) throw new Error(`Uploaded asset verification failed: ${name}; release remains draft`);
+            }
+            const published = await github.rest.repos.updateRelease({ ...repo, release_id: release.data.id, draft: false, prerelease: false, make_latest: 'true' });
+            core.summary.addLink('Formal Release', published.data.html_url).addRaw('\nAll test, build, package and upload SHA256 gates passed.').write();
