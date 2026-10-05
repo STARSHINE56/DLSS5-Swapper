@@ -124,16 +124,16 @@ function diagnoseInstallation(gameDir, planData, deps = {}) {
   if (verify.verdict === 'NOT_TESTED') {
     findings.push({
       severity: 'info',
-      what: 'No game logs yet.',
-      why: 'The game has not been started since this install.',
+      what: '尚无游戏日志。',
+      why: '安装后游戏尚未启动过。',
       suggestion: '启动游戏后返回本页重新验证。',
       repairId: null
     });
   } else if (verify.verdict === 'SUCCESS') {
-    findings.push({ severity: 'ok', what: `${route || 'Route'} engaged.`, why: 'Route logs show normal startup.', suggestion: null, repairId: null });
+    findings.push({ severity: 'ok', what: `${route || '路线'} 已生效。`, why: '路线日志显示正常启动。', suggestion: null, repairId: null });
   } else if (verify.verdict === 'FAILED') {
     for (const f of verify.findings.slice(0, 3)) {
-      findings.push({ severity: 'error', what: f.message, why: 'Found in ' + f.log, suggestion: null, repairId: null });
+      findings.push({ severity: 'error', what: f.message, why: '发现于 ' + f.log, suggestion: null, repairId: null });
     }
     // ReShade not loading on a dgVoodoo title is the classic dxgi-vs-d3d11
     // mismatch. The fix is reversible: swap the proxy and reinstall through
@@ -149,8 +149,8 @@ function diagnoseInstallation(gameDir, planData, deps = {}) {
     } else if (!reshadeLog && !feedLog) {
       findings.push({
         severity: 'warn',
-        what: 'No ReShade or Feeder log was produced.',
-        why: 'The game may be failing before the hook, or another loader is intercepting.',
+        what: '未生成 ReShade 或 Feeder 日志。',
+        why: '游戏可能在挂钩之前就失败了，或另一个加载器正在拦截。',
         suggestion: '检查游戏是否被反作弊/其他加载器拦截；查看诊断导出。',
         repairId: null
       });

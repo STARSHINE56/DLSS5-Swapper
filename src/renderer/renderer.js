@@ -955,7 +955,11 @@ function smartStateText(state) {
 
 function smartConfidenceHtml(c) {
   const tone = c === 'HIGH' ? 'on' : c === 'UNKNOWN' ? 'off' : '';
-  return `<span class="smart-tag${tone ? ' ' + tone : ''}">${esc(c || '—')}</span>`;
+  const label = c === 'HIGH' ? t('smartConfidenceHigh')
+    : c === 'MEDIUM' ? t('smartConfidenceMedium')
+    : c === 'LOW' ? t('smartConfidenceLow')
+    : c === 'UNKNOWN' ? t('smartConfidenceUnknown') : (c || '—');
+  return `<span class="smart-tag${tone ? ' ' + tone : ''}">${esc(label)}</span>`;
 }
 
 function smartRiskHtml(risk) {
@@ -1076,14 +1080,15 @@ async function runSmartAction(kind, dir) {
   const pick = sheetDetails ? chosenExe(sheetDetails, dir) : null;
   const mode = $('smartMode')?.value || 'auto';
   jobLines = [];
-  jobLog('--- smart ' + kind + ' ---');
+  const kindLabel = { detect: '检测', recommend: '推荐', plan: '计划', install: '安装', verify: '验证', diagnose: '诊断', repair: '修复', 'restore-lkg': '恢复' }[kind] || kind;
+  jobLog('--- 智能' + kindLabel + ' ---');
   if (kind === 'verify' || kind === 'diagnose') {
     // These are reads; the sheet body shows the outcome.
     try {
       const out = kind === 'verify' ? await window.lab.autoVerify(dir) : await window.lab.autoDiagnose(dir);
       if (kind === 'verify') renderSmartBody({ detection: out, recommendation: { blocked: false, recommendedRoute: out.route || null, confidence: 'HIGH', warnings: [], reasons: [], fallbackRoutes: [], optionalRoutes: [], multipass: 1 }, plan: { risk: 'low', components: [], replacements: [], conflicts: [], steps: [] }, state: { verifyState: out.state } }, dir);
       else renderDiagBody(out, dir);
-      if (out.verdict) jobLog('verdict: ' + out.verdict);
+      if (out.verdict) jobLog('结果: ' + out.verdict);
     } catch (e) { jobLog(e.message); }
     return;
   }
@@ -1099,7 +1104,7 @@ async function runSmartAction(kind, dir) {
   if (btn) { btn.disabled = false; btn.textContent = t('smartInstall'); }
   if (res && res.ok) {
     jobLog(kind === 'install'
-      ? `smart install done - ${res.replaced} replaced, ${res.added} added`
+      ? `智能安装完成 - 替换 ${res.replaced} 个文件，新增 ${res.added} 个文件`
       : t('smartLkgRestored'));
     jobLog(t('smartVerifyAfterGame'));
   } else {

@@ -74,7 +74,7 @@ function buildRecommendation(detection, mode, deps = {}) {
       driverVersion: detection.gpu ? detection.gpu.driver : null,
       mode, recommendedRoute: null, fallbackRoutes, optionalRoutes,
       confidence: CONFIDENCE.UNKNOWN,
-      warnings: ['No game executable was detected in this folder.'],
+      warnings: ['未在此文件夹中检测到游戏可执行文件。'],
       reasons: [], conflicts: [], antiCheat: detection.antiCheat,
       blocked: true, blockReason: 'no-exe', multipass: 1, experimental: mode === 'experimental'
     };
@@ -85,19 +85,19 @@ function buildRecommendation(detection, mode, deps = {}) {
   const primary = gpu.primary;
   if (!gpu.available) {
     confidence = CONFIDENCE.LOW;
-    warnings.push('No NVIDIA GPU was detected via nvidia-smi; the smart installer will not run automatically.');
+    warnings.push('未检测到 NVIDIA GPU（nvidia-smi 不可用）；智能安装不会自动运行。');
   } else if (!gpu.isNvidia) {
     blocked = true;
     blockReason = 'non-nvidia';
     confidence = CONFIDENCE.LOW;
-    reasons.push(`GPU: ${primary.name} (non-NVIDIA)`);
+    reasons.push(`GPU: ${primary.name}（非 NVIDIA）`);
     warnings.push('当前智能安装主要面向 NVIDIA RTX GPU。');
   } else if (!gpu.isRtx) {
     confidence = CONFIDENCE.LOW;
-    reasons.push(`GPU: ${primary.name} (NVIDIA, non-RTX)`);
+    reasons.push(`GPU: ${primary.name}（NVIDIA，非 RTX）`);
     warnings.push('当前智能安装主要面向 NVIDIA RTX GPU。旧架构运行神经网络需要自行提供 modded nvngx_dlssnr.dll。');
   } else {
-    reasons.push(`GPU: ${primary.name} (RTX)`);
+    reasons.push(`GPU: ${primary.name}（RTX）`);
     if (gpu.isBlackwell) reasons.push('RTX Blackwell GPU — 官方神经网络运行时支持');
     else {
       confidence = demote(confidence, CONFIDENCE.LOW);
@@ -108,9 +108,9 @@ function buildRecommendation(detection, mode, deps = {}) {
   // --- Driver ---
   const driver = gpu.driverNumber;
   if (gpu.available && gpu.isNvidia && driver != null) {
-    reasons.push(`Driver: ${gpu.driver}`);
+    reasons.push(`驱动: ${gpu.driver}`);
     if (driver < MIN_DRIVER) {
-      warnings.push(`NVIDIA driver ${gpu.driver} is older than the recommended 616.56 for neural rendering.`);
+      warnings.push(`NVIDIA 驱动 ${gpu.driver} 低于神经网络渲染推荐的 616.56。`);
       confidence = demote(confidence, CONFIDENCE.LOW);
     }
   }
@@ -120,9 +120,9 @@ function buildRecommendation(detection, mode, deps = {}) {
     blocked = true;
     blockReason = 'unknown-api';
     confidence = CONFIDENCE.UNKNOWN;
-    warnings.push("The game's rendering API could not be determined. Smart installation is stopped; choose the API manually in the advanced settings.");
+    warnings.push('无法确定游戏的渲染 API。智能安装已停止；请在高级设置中手动选择 API。');
   } else {
-    reasons.push(`API: ${exe.apiLabel} (${exe.via || 'detected'})`);
+    reasons.push(`API: ${exe.apiLabel}（${exe.via || '检测'}）`);
   }
 
   // --- Anti-cheat / competitive ---
@@ -138,7 +138,7 @@ function buildRecommendation(detection, mode, deps = {}) {
     blocked = true;
     blockReason = 'managed-modpack';
     confidence = CONFIDENCE.LOW;
-    warnings.push('A Mod Organizer Stock Game / Root Builder install was detected; direct injection is blocked.');
+    warnings.push('检测到 Mod Organizer Stock Game / Root Builder 安装；已阻止直接注入。');
   }
 
   // --- Existing proxy DLL conflicts ---
@@ -149,9 +149,9 @@ function buildRecommendation(detection, mode, deps = {}) {
       blocked = true;
       blockReason = 'unknown-dll';
       confidence = CONFIDENCE.UNKNOWN;
-      warnings.push(`An unknown proxy DLL is present: ${unknown.map(c => c.name).join(', ')}. Smart installation is stopped; inspect the file in the advanced settings.`);
+      warnings.push(`存在未知代理 DLL：${unknown.map(c => c.name).join(', ')}。智能安装已停止；请在高级设置中检查该文件。`);
     } else {
-      warnings.push(`Conflicting mods detected: ${conflictList.map(c => `${c.name} (${c.kind})`).join(', ')}. They will not be overwritten.`);
+      warnings.push(`检测到冲突的 Mod：${conflictList.map(c => `${c.name} (${c.kind})`).join(', ')}。它们不会被覆盖。`);
       confidence = demote(confidence, CONFIDENCE.MEDIUM);
     }
   }
@@ -170,7 +170,7 @@ function buildRecommendation(detection, mode, deps = {}) {
   const routes = officialRoutes(detection);
   if (!routes.length) {
     confidence = CONFIDENCE.LOW;
-    warnings.push(`No supported installation route for ${exe.apiLabel}.`);
+    warnings.push(`${exe.apiLabel} 没有支持的安装路线。`);
     return {
       api: exe.api, gpu: primary ? primary.name : null, driverVersion: gpu.driver || null,
       mode, recommendedRoute: null, fallbackRoutes, optionalRoutes,
@@ -188,7 +188,7 @@ function buildRecommendation(detection, mode, deps = {}) {
     ...exe, hasNativeDlss: native, emulator: exe.emulator
   });
   const reshade = reshadePresent(detection);
-  if (reshade) reasons.push('ReShade already present — the existing loader will be reused where compatible');
+  if (reshade) reasons.push('已有 ReShade — 兼容时复用现有加载器');
 
   const optiPossible = routes.includes('optiscaler') && gpu.isBlackwell && driver != null && driver >= MIN_DRIVER;
   const presrPossible = optiPossible && (mode === 'quality' || mode === 'experimental');
@@ -196,7 +196,7 @@ function buildRecommendation(detection, mode, deps = {}) {
   switch (mode) {
     case 'stable':
       recommendedRoute = officialRecommended === 'renodx' ? 'renodx' : officialRecommended;
-      if (officialRecommended === 'renodx') warnings.push('Native RenoDX route selected (stable). Multipass is kept at its conservative default.');
+      if (officialRecommended === 'renodx') warnings.push('已选择原生 RenoDX 路线（稳定）。Multipass 保持保守默认。');
       break;
     case 'quality':
       // Native DLSS output is the highest-fidelity path where it exists;
@@ -205,7 +205,7 @@ function buildRecommendation(detection, mode, deps = {}) {
       recommendedRoute = routes.includes('native') && native ? 'native' : (routes.includes('renodx') ? 'renodx' : routes[0]);
       if (presrPossible) {
         optionalRoutes.push('optiscaler-presr');
-        warnings.push('OptiScaler pre-SR multipass is available as an optional quality route; it is not installed automatically without confirmation.');
+        warnings.push('OptiScaler pre-SR 多遍渲染可作为可选画质路线；未经确认不会自动安装。');
       }
       break;
     case 'performance':

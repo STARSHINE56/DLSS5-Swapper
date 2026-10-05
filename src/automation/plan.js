@@ -36,46 +36,46 @@ function preflightCheck(detection, recommendation, deps = {}) {
   // have hand-built.
   const gpu = detection.gpu || {};
   if (!gpu.available) {
-    checks.push(fail('fail', 'gpu', 'No NVIDIA GPU detected (nvidia-smi unavailable).'));
+    checks.push(fail('fail', 'gpu', '未检测到 NVIDIA GPU（nvidia-smi 不可用）。'));
     errors.push('gpu');
   } else if (!gpu.isNvidia) {
     checks.push(fail('fail', 'gpu', '当前智能安装主要面向 NVIDIA RTX GPU。'));
     errors.push('gpu');
   } else if (!gpu.isRtx) {
-    checks.push(fail('warn', 'gpu', 'NVIDIA GPU is not an RTX card; neural rendering may need a modded model.'));
+    checks.push(fail('warn', 'gpu', 'NVIDIA GPU 非 RTX 显卡；神经网络渲染可能需要自行提供 modded 模型。'));
     warnings.push('gpu');
   } else if (gpu.driverNumber != null && gpu.driverNumber < 61656) {
-    checks.push(fail('warn', 'driver', `NVIDIA driver ${gpu.driver} is older than 616.56; neural rendering may not initialise.`));
+    checks.push(fail('warn', 'driver', `NVIDIA 驱动 ${gpu.driver} 低于 616.56；神经网络渲染可能无法初始化。`));
     warnings.push('driver');
   } else {
-    checks.push(fail('pass', 'gpu', gpu.primary ? `${gpu.primary.name} — ${gpu.driver}` : 'GPU OK'));
+    checks.push(fail('pass', 'gpu', gpu.primary ? `${gpu.primary.name} — ${gpu.driver}` : 'GPU 正常'));
   }
 
   // API
   if (!detection.exe) {
-    checks.push(fail('fail', 'api', 'No game executable detected.'));
+    checks.push(fail('fail', 'api', '未检测到游戏可执行文件。'));
     errors.push('api');
   } else if (detection.apiConfidence === 'UNKNOWN') {
-    checks.push(fail('fail', 'api', 'Rendering API is unknown; choose it manually in advanced settings.'));
+    checks.push(fail('fail', 'api', '渲染 API 未知；请在高级设置中手动选择。'));
     errors.push('api');
   } else {
-    checks.push(fail('pass', 'api', `${detection.exe.apiLabel} (${detection.exe.via || 'detected'})`));
+    checks.push(fail('pass', 'api', `${detection.exe.apiLabel}（${detection.exe.via || '检测'}）`));
   }
 
   // Anti-cheat
   if (detection.antiCheat && detection.antiCheat.blocked) {
-    checks.push(fail('fail', 'anti-cheat', 'Anti-cheat detected; smart DLL injection is stopped.'));
+    checks.push(fail('fail', 'anti-cheat', '检测到反作弊系统；智能 DLL 注入已停止。'));
     errors.push('anti-cheat');
   } else {
-    checks.push(fail('pass', 'anti-cheat', 'No anti-cheat detected.'));
+    checks.push(fail('pass', 'anti-cheat', '未检测到反作弊系统。'));
   }
 
   // Mod manager
   if (detection.managedModRoot) {
-    checks.push(fail('fail', 'mod-manager', 'Mod Organizer Stock Game / Root Builder detected.'));
+    checks.push(fail('fail', 'mod-manager', '检测到 Mod Organizer Stock Game / Root Builder。'));
     errors.push('mod-manager');
   } else {
-    checks.push(fail('pass', 'mod-manager', 'No managed modpack root detected.'));
+    checks.push(fail('pass', 'mod-manager', '未检测到受管理的 Mod 整合根目录。'));
   }
 
   // Write access - detection carries the measured answer; an explicit probe
@@ -86,53 +86,53 @@ function preflightCheck(detection, recommendation, deps = {}) {
     checks.push(fail('fail', 'writable', '当前游戏目录需要更高权限。'));
     errors.push('writable');
   } else {
-    checks.push(fail('pass', 'writable', 'Game folder is writable.'));
+    checks.push(fail('pass', 'writable', '游戏目录可写。'));
   }
 
   // Disk space
   const disk = detection.diskSpace;
   if (disk && !disk.ok) {
-    checks.push(fail('fail', 'disk', `Insufficient disk space: ${Math.floor(disk.free / 1024 / 1024)} MB free.`));
+    checks.push(fail('fail', 'disk', `磁盘空间不足：剩余 ${Math.floor(disk.free / 1024 / 1024)} MB。`));
     errors.push('disk');
   } else if (disk) {
-    checks.push(fail('pass', 'disk', `${Math.floor(disk.free / 1024 / 1024 / 1024 * 10) / 10} GB free.`));
+    checks.push(fail('pass', 'disk', `剩余 ${Math.floor(disk.free / 1024 / 1024 / 1024 * 10) / 10} GB。`));
   }
 
   // DLL conflicts
   const conflicts = (detection.existingDlls || []).filter(d => d.conflict && d.kind !== 'managed');
   const unknown = conflicts.filter(c => c.kind === 'unknown');
   if (unknown.length) {
-    checks.push(fail('fail', 'conflicts', `Unknown proxy DLL: ${unknown.map(c => c.name).join(', ')}. Smart install stopped.`));
+    checks.push(fail('fail', 'conflicts', `未知代理 DLL：${unknown.map(c => c.name).join(', ')}。智能安装已停止。`));
     errors.push('conflicts');
   } else if (conflicts.length) {
-    checks.push(fail('warn', 'conflicts', `Mods present (not overwritten): ${conflicts.map(c => c.name).join(', ')}.`));
+    checks.push(fail('warn', 'conflicts', `存在 Mod（不会被覆盖）：${conflicts.map(c => c.name).join(', ')}。`));
     warnings.push('conflicts');
   } else {
-    checks.push(fail('pass', 'conflicts', 'No conflicting graphics mods detected.'));
+    checks.push(fail('pass', 'conflicts', '未检测到冲突的画质 Mod。'));
   }
 
   // Backup integrity: a pending transaction must be resolved first.
   if (fs.existsSync(journal.pendingPath(detection.gameDir))) {
-    checks.push(fail('fail', 'backup', 'A previous interrupted switch needs recovery. Click Restore originals first.'));
+    checks.push(fail('fail', 'backup', '存在之前中断的切换，需要恢复。请先点击「恢复原文件」。'));
     errors.push('backup');
   } else {
-    checks.push(fail('pass', 'backup', 'Backup directory is ready.'));
+    checks.push(fail('pass', 'backup', '备份目录就绪。'));
   }
 
   // Components: the payload the app ships must carry the runtime for the route.
   const payload = deps.payload || null;
   const route = recommendation && recommendation.recommendedRoute;
   if (route && !payload) {
-    checks.push(fail('fail', 'components', 'Application payload is missing; reinstall the app package.'));
+    checks.push(fail('fail', 'components', '应用组件包缺失；请重新安装应用。'));
     errors.push('components');
   } else if (route === 'feeder' && payload && (!payload.source.feeder || !payload.source.hasNeuralRendering)) {
-    checks.push(fail('fail', 'components', 'Feeder payload is incomplete or lacks the neural runtime.'));
+    checks.push(fail('fail', 'components', 'Feeder 组件包不完整或缺少神经网络运行时。'));
     errors.push('components');
   } else if (route === 'optiscaler' && payload && !payload.source.hasNeuralRendering) {
-    checks.push(fail('fail', 'components', 'Neural runtime payload is missing for OptiScaler.'));
+    checks.push(fail('fail', 'components', 'OptiScaler 缺少神经网络运行时组件。'));
     errors.push('components');
   } else if (route) {
-    checks.push(fail('pass', 'components', `Components for ${route} route are available locally.`));
+    checks.push(fail('pass', 'components', `${route} 路线的组件在本地可用。`));
   }
 
   // Download source / network. The offline path is a warning, not a block:
@@ -141,7 +141,7 @@ function preflightCheck(detection, recommendation, deps = {}) {
   if (route && deps.network) {
     checks.push(deps.network === 'offline'
       ? fail('warn', 'network', '在线组件更新检查失败，当前继续使用本地版本。')
-      : fail('pass', 'network', 'Network available for component updates.'));
+      : fail('pass', 'network', '网络可用，可更新组件。'));
     if (deps.network === 'offline') warnings.push('network');
   }
 
@@ -178,7 +178,7 @@ function componentsForRoute(route, detection) {
       list.push({
         name: 'DLSS5-Feeder', version: feederRelease.version,
         source: COMPONENT_SOURCES['DLSS5-Feeder'], action: 'download-verified',
-        note: 'shader + host + addon (bundled payload)'
+        note: '着色器 + 主机 + 插件（随应用内置）'
       });
       const api = detection.exe && detection.exe.api;
       if (api === 'd3d8' || api === 'd3d9' || api === 'ddraw') {
@@ -207,11 +207,11 @@ function replacementsForRoute(route, detection) {
   const out = [];
   const existing = (detection.existingDlls || []).filter(d => d.kind === 'reshade' || d.kind === 'managed');
   if (route === 'feeder' || route === 'native' || route === 'renodx') {
-    out.push({ rel: 'dxgi.dll / d3d11.dll', action: existing.length ? 'reuse-tracked' : 'backup-then-replace', note: 'ReShade hook' });
-    out.push({ rel: 'renodx-dlss*.addon64', action: 'backup-then-add', note: '消费者 add-on' });
+    out.push({ rel: 'dxgi.dll / d3d11.dll', action: existing.length ? 'reuse-tracked' : 'backup-then-replace', note: 'ReShade 挂钩' });
+    out.push({ rel: 'renodx-dlss*.addon64', action: 'backup-then-add', note: '消费者插件' });
     out.push({ rel: 'nvngx_dlssnr.dll / nvngx_dlss.dll', action: 'backup-then-replace', note: '只升级不降级（官方规则）' });
   } else if (route === 'optiscaler') {
-    out.push({ rel: 'dxgi.dll / winmm.dll', action: 'backup-then-replace', note: 'OptiScaler hook' });
+    out.push({ rel: 'dxgi.dll / winmm.dll', action: 'backup-then-replace', note: 'OptiScaler 挂钩' });
     out.push({ rel: 'OptiScaler/*', action: 'backup-then-add', note: '组件与许可证' });
   }
   return out;
