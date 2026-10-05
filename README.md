@@ -9,17 +9,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rakanki911/DLSS5-Swapper/releases/latest"><img src="https://img.shields.io/github/v/release/rakanki911/DLSS5-Swapper?color=8fd400&label=release" alt="Latest release"></a>
-  <a href="https://github.com/rakanki911/DLSS5-Swapper/releases"><img src="https://img.shields.io/github/downloads/rakanki911/DLSS5-Swapper/total?color=8fd400&label=downloads&cacheSeconds=300" alt="Total downloads"></a>
+  <a href="https://github.com/STARSHINE56/DLSS5-Swapper/releases/latest"><img src="https://img.shields.io/github/v/release/STARSHINE56/DLSS5-Swapper?color=8fd400&label=release" alt="Latest release"></a>
+  <a href="https://github.com/STARSHINE56/DLSS5-Swapper/releases"><img src="https://img.shields.io/github/downloads/STARSHINE56/DLSS5-Swapper/total?color=8fd400&label=downloads&cacheSeconds=300" alt="Total downloads"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-8fd400" alt="Windows 10/11">
   <img src="https://img.shields.io/badge/languages-38-8fd400" alt="38 languages">
-  <a href="https://buymeacoffee.com/rakanki911"><img src="https://img.shields.io/badge/support-555" alt="Support"></a>
+  <a href="https://buymeacoffee.com/rakanki911"><img src="https://img.shields.io/badge/support_upstream-555" alt="Support upstream author"></a>
   <a href="https://buymeacoffee.com/rakanki911"><img height="20" src="https://cdn.buymeacoffee.com/buttons/v2/lato-yellow.png" alt="Buy me a coffee"></a>
 </p>
 
 ## Starshine Auto (this fork)
 
-This is a **non-official fork** of [rakanki911/DLSS5-Swapper](https://github.com/rakanki911/DLSS5-Swapper). It keeps every official feature and adds a safe, automated deployment layer for ordinary users:
+This is **STARSHINE56’s non-official fork** of [rakanki911/DLSS5-Swapper](https://github.com/rakanki911/DLSS5-Swapper), licensed under **MIT**. It keeps every official feature and adds a safe, automated deployment layer for ordinary users:
 
 - **Smart detection** — GPU (NVIDIA RTX), driver, rendering API and existing proxy DLLs are read from the real machine; `UNKNOWN` is reported as `UNKNOWN`, never guessed.
 - **Explainable recommendation** — the recommended route (Native RenoDX / DLSS5-Feeder / OptiScaler / Multipass) always comes with the reasons and warnings that led to it.
@@ -29,13 +29,19 @@ This is a **non-official fork** of [rakanki911/DLSS5-Swapper](https://github.com
 
 > ⚠️ **Disclaimer:** this fork is **not affiliated with NVIDIA or any game developer**. Modifying game files can cause compatibility problems, be overwritten by game updates, or conflict with other mods. The smart installer stops automatically when anti-cheat, unknown proxy DLLs or online-competitive games are detected — it never bypasses protection.
 
-The official README below is unchanged; all credit for the original project stays with its author and contributors.
+The upstream documentation below is retained, with download links pointing to this fork. Original credit stays with Rakan Alkhaldi and contributors.
+
+**Support upstream author / 支持原项目作者:** the Sponsor button and Buy Me a Coffee links support **rakanki911**, not the Starshine Auto fork author.
+
+### Starshine Auto 2.2.10
+
+Installation now records a pending candidate. Only successful game-log verification promotes it to Last Known Good; previous verified configurations survive untested or failed installs. Legacy unverified records are preserved as candidates. CI and tag builds validate tests, localization, package contents and SHA256 before publication.
 
 ## Download
 
-[**Windows Installer**](https://github.com/rakanki911/DLSS5-Swapper/releases/latest) ·
-[**Portable**](https://github.com/rakanki911/DLSS5-Swapper/releases/latest) ·
-[Checksums](https://github.com/rakanki911/DLSS5-Swapper/releases/latest)
+[**Windows Installer**](https://github.com/STARSHINE56/DLSS5-Swapper/releases/latest) ·
+[**Portable**](https://github.com/STARSHINE56/DLSS5-Swapper/releases/latest) ·
+[Checksums](https://github.com/STARSHINE56/DLSS5-Swapper/releases/latest)
 
 Both are on the latest release page, with `SHA256SUMS.txt` beside them.
 
@@ -94,7 +100,7 @@ Each one is written up in full - what broke, why, and what was changed.
 | **2.2.0** | [Optional OptiScaler and a smarter library](docs/releases/v2.2.0.md) |
 
 Every release also carries its own notes and downloads on the
-[releases page](https://github.com/rakanki911/DLSS5-Swapper/releases).
+[releases page](https://github.com/STARSHINE56/DLSS5-Swapper/releases).
 
 ## Compatibility
 
@@ -176,10 +182,10 @@ Compatibility varies by renderer and game. Xenia HUD correction remains experime
   and stored locally with Windows encrypted storage. It is never written to the
   public profile or the normal community settings file.
 
-## Support
+## Support upstream author / 支持原项目作者
 
 DLSS 5 Swapper is free and MIT licensed. If it saved you an evening of
-fiddling, you can buy me a coffee.
+fiddling, you can support the original author **Rakan Alkhaldi (rakanki911)** below. This is not a Starshine Auto donation account.
 
 <p><a href="https://buymeacoffee.com/rakanki911"><img height="44" src="https://cdn.buymeacoffee.com/buttons/v2/lato-yellow.png" alt="Buy me a coffee"></a></p>
 

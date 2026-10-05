@@ -2058,14 +2058,14 @@ async function automationVerify(dir) {
   const state = automation.state(dir, { userData });
   const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
   const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
-  const verify = automation.verify(dir, { recommendedRoute: route }, { exeDir, route });
-  if (verify.verdict === 'SUCCESS') {
-    try { require('./src/automation/recovery').touchLkgVerified(dir, new Date().toISOString(), { userData }); } catch {}
-  }
+  const verify = automation.verify(dir, { recommendedRoute: route }, {
+    exeDir, route, installedAt: state && state.pendingCandidate && state.pendingCandidate.installedAt
+  });
+  require('./src/automation/recovery').recordVerification(dir, verify, { userData });
   return verify;
 }
 
-ipcMain.handle('auto-verify', (event, dir) => automationVerify(dir));
+ipcMain.handle('auto-verify', (event, dir) => exclusiveMutation(() => automationVerify(dir)));
 
 ipcMain.handle('auto-diagnose', (event, dir) => (async () => {
   const userData = app.getPath('userData');
