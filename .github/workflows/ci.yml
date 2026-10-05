@@ -1,0 +1,32 @@
+name: Starshine Auto CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    name: Windows tests and clean build
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/validate-build
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-validation-${{ github.sha }}
+          path: |
+            test-results.log
+            package-verification.log
+            dist/test-results.json
+            dist/release-assets.json
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES.md
+          if-no-files-found: warn
