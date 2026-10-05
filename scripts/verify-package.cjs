@@ -49,7 +49,7 @@ try {
   if (forbidden.length) console.error('Forbidden packaged paths:', forbidden.join(', '));
   const resources = path.dirname(archive);
   for (const rel of ['payload/streamline/nvngx_dlssnr.dll', 'payload/renodx-dlss5.addon64',
-    'payload/renodx-dlss.addon64', 'overlay/dlss5-lab-overlay.addon64']) {
+    'payload/feeder/host64/renodx-dlss.addon64', 'overlay/dlss5-lab-overlay.addon64']) {
     checks.push([`runtime resource: ${rel}`, fs.existsSync(path.join(resources, rel))]);
   }
   for (const [name, pass] of checks) {
