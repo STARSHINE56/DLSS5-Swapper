@@ -178,4 +178,40 @@ test('dgVoodoo marker in a proxy is classified, not unknown', async t => {
   const d = await detect.detectGame({ gameDir: root }, { scanGame: () => fakeScan(root), gpuInfo: () => RTX, versionMentions: fakeVersionMentions });
   const found = d.existingDlls.find(x => x.name.toLowerCase() === 'ddraw.dll');
   assert.equal(found.kind, 'dgvoodoo');
+  assert.ok(d.mods.some(mod => mod.kind === 'dgvoodoo'));
+});
+
+test('mixed GPUs never borrow Blackwell capability or driver from another card', async t => {
+  const root = temp(t);
+  for (const rows of [
+    [{ name: 'NVIDIA GeForce RTX 3070', driver: '551.86' }, ...RTX],
+    [{ name: 'NVIDIA GeForce RTX 5070', driver: '551.86' }, ...RTX]
+  ]) {
+    const d = await detect.detectGame({ gameDir: root }, { scanGame: () => fakeScan(root), gpuInfo: () => rows });
+    assert.equal(d.gpu.isBlackwell, rows[0].name.includes('5070'));
+    assert.equal(d.gpu.driverSupported, false);
+    assert.equal(d.gpu.driverNumber, 55186);
+    assert.equal(d.multiGpu, true);
+  }
+});
+
+test('manual API choice changes the effective target without erasing scan evidence', async t => {
+  const root = temp(t), scan = fakeScan(root, { via: 'undetected' });
+  const d = await detect.detectGame({ gameDir: root, apiOverride: 'd3d11' }, { scanGame: () => scan, gpuInfo: () => RTX });
+  assert.equal(d.exe.api, 'dxgi');
+  assert.equal(d.exe.apiLabel, 'DirectX 11');
+  assert.equal(d.exe.via, 'manual');
+  assert.equal(d.apiConfidence, 'MEDIUM');
+  assert.equal(scan.chosen.apiLabel, 'DirectX 12');
+  assert.equal(scan.chosen.via, 'undetected');
+});
+
+test('an explicit executable outside the candidates never falls back to a different game', async t => {
+  const root = temp(t);
+  const d = await detect.detectGame({ gameDir: root, exePath: path.join(root, 'missing.exe') }, {
+    scanGame: () => fakeScan(root), gpuInfo: () => RTX
+  });
+  assert.equal(d.ok, false);
+  assert.equal(d.exe, null);
+  assert.equal(d.apiConfidence, 'UNKNOWN');
 });

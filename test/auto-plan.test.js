@@ -71,6 +71,14 @@ test('preflight passes for a healthy RTX DX12 game', async t => {
   assert.ok(p.checks.every(c => c.status !== 'fail'));
 });
 
+test('preflight exposes multi-GPU, manual API and unknown-driver uncertainties', t => {
+  const root = temp(t), d = detection(root, { apiConfidence: 'MEDIUM' });
+  d.exe.via = 'manual'; d.multiGpu = true; d.gpu.driverNumber = null;
+  const p = planMod.preflightCheck(d, recommendation(), { payload: PAYLOAD });
+  assert.equal(p.ok, true);
+  for (const name of ['multi-gpu', 'api', 'driver']) assert.ok(p.warnings.includes(name));
+});
+
 test('non-NVIDIA GPU fails preflight', async t => {
   const root = temp(t);
   const d = detection(root, {});

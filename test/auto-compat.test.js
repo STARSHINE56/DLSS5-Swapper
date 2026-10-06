@@ -139,3 +139,23 @@ test('fallback routes are a subset of official routes', () => {
   assert.ok(Array.isArray(r.fallbackRoutes));
   assert.ok(!r.fallbackRoutes.includes(r.recommendedRoute));
 });
+
+test('indirect API evidence caps recommendation confidence and explains uncertainty', () => {
+  const r = compat.buildRecommendation(detection({ apiConfidence: 'MEDIUM', via: 'strings' }), 'auto');
+  assert.equal(r.confidence, 'MEDIUM');
+  assert.ok(r.warnings.some(w => /间接线索/.test(w)));
+});
+
+test('multiple GPUs lower confidence and do not offer hardware-dependent pre-SR', () => {
+  const d = detection(); d.multiGpu = true;
+  const r = compat.buildRecommendation(d, 'quality');
+  assert.equal(r.confidence, 'LOW');
+  assert.ok(r.warnings.some(w => /多张显卡/.test(w)));
+  assert.ok(!r.optionalRoutes.includes('optiscaler-presr'));
+});
+
+test('unreadable driver and stacked blockers never increase confidence', () => {
+  assert.equal(compat.buildRecommendation(detection({ driverNumber: null }), 'auto').confidence, 'LOW');
+  const d = detection({ apiConfidence: 'UNKNOWN', antiCheat: { blocked: true } });
+  assert.equal(compat.buildRecommendation(d, 'auto').confidence, 'UNKNOWN');
+});
