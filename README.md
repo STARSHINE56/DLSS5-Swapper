@@ -37,6 +37,10 @@ The upstream documentation below is retained, with download links pointing to th
 
 Installation now records a pending candidate. Only successful game-log verification promotes it to Last Known Good; previous verified configurations survive untested or failed installs. Legacy unverified records are preserved as candidates. CI and tag builds validate tests, localization, package contents and SHA256 before publication.
 
+Smart detection keeps each GPU's model and driver together and warns when the game's GPU cannot be inferred from a multi-GPU list. Indirect API evidence lowers confidence; saved per-executable API choices are shared by detection, planning and smart installation without altering the original scan.
+
+Runtime verification distinguishes loaded components and delivered frames from neural execution. Success requires route-specific evidence of NGX feature 18 creation and evaluation. Installation captures log baselines so old successful sessions cannot verify a new candidate; unreadable or oversized logs stay inconclusive. Older records establish a baseline on their first check and need another game session. These checks confirm log evidence, not image quality or FPS, and real-game validation is still required.
+
 ## Download
 
 [**Windows Installer**](https://github.com/STARSHINE56/DLSS5-Swapper/releases/latest) ·
