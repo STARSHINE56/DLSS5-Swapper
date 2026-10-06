@@ -1002,7 +1002,7 @@ function renderSmartBody(data, dir) {
   body.innerHTML = html;
   const notes = $('smartNotes');
   if (notes) {
-    const stateLine = state ? `<div class="smart-state"><b>${esc(t('smartTitle'))} · ${esc(smartStateText(state.verifyState || state.route ? 'ready' : state.verifyState))}</b></div>` : '';
+    const stateLine = state ? `<div class="smart-state"><b>${esc(t('smartTitle'))} · ${esc(smartStateText(state.verifyState || (state.route ? 'ready' : null)))}</b></div>` : '';
     notes.innerHTML = stateLine;
   }
   wireSmartVerify(data, dir);
@@ -1047,12 +1047,28 @@ function renderDiagBody(diag, dir) {
   };
 }
 
+let smartRequest = 0;
+
+function renderVerificationBody(result) {
+  const body = $('smartBody');
+  if (!body) return;
+  const status = result.state || (result.ok === false ? 'failed' : 'needs_attention');
+  const messages = (result.findings || []).map(f => `${f.log}: ${f.message}`);
+  if (result.message || result.code) messages.push(result.message || t(result.code));
+  body.innerHTML = `<div class="smart-state"><b>${esc(smartStateText(status))}</b></div>` + listHtml(messages);
+  const notes = $('smartNotes');
+  if (notes) notes.innerHTML = '';
+}
+
 async function loadSmartCard(dir, pick) {
   const card = $('smartCard');
   if (!card) return;
   const body = $('smartBody');
   if (!body) return;
   const mode = $('smartMode')?.value || 'auto';
+  const request = ++smartRequest;
+  const current = () => request === smartRequest && body === $('smartBody') &&
+    mode === ($('smartMode')?.value || 'auto');
   body.innerHTML = '<div class="pad" style="color:var(--dim)">…</div>';
   let data;
   try {
@@ -1062,9 +1078,11 @@ async function loadSmartCard(dir, pick) {
     ]);
     data = { ...plan, state: st };
   } catch (e) {
+    if (!current()) return;
     body.innerHTML = `<div class="smart-err">${esc(e.message || String(e))}</div>`;
     return;
   }
+  if (!current()) return;
   renderSmartBody(data, dir);
 }
 
@@ -1083,13 +1101,16 @@ async function runSmartAction(kind, dir) {
   const kindLabel = { detect: '检测', recommend: '推荐', plan: '计划', install: '安装', verify: '验证', diagnose: '诊断', repair: '修复', 'restore-lkg': '恢复' }[kind] || kind;
   jobLog('--- 智能' + kindLabel + ' ---');
   if (kind === 'verify' || kind === 'diagnose') {
+    const request = ++smartRequest;
+    const body = $('smartBody');
     // These are reads; the sheet body shows the outcome.
     try {
       const out = kind === 'verify' ? await window.lab.autoVerify(dir) : await window.lab.autoDiagnose(dir);
-      if (kind === 'verify') renderSmartBody({ detection: out, recommendation: { blocked: false, recommendedRoute: out.route || null, confidence: 'HIGH', warnings: [], reasons: [], fallbackRoutes: [], optionalRoutes: [], multipass: 1 }, plan: { risk: 'low', components: [], replacements: [], conflicts: [], steps: [] }, state: { verifyState: out.state } }, dir);
+      if (request !== smartRequest || body !== $('smartBody')) return;
+      if (kind === 'verify') renderVerificationBody(out);
       else renderDiagBody(out, dir);
       if (out.verdict) jobLog('结果: ' + out.verdict);
-    } catch (e) { jobLog(e.message); }
+    } catch (e) { if (request === smartRequest && body === $('smartBody')) jobLog(e.message); }
     return;
   }
   jobRunning = true;

@@ -13,6 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const { STATES } = require('./state');
+const { snapshotLogs } = require('./runtime-logs');
 
 function storeFile(userData) {
   return path.join(userData, 'automation.json');
@@ -119,12 +120,15 @@ function completeInstall(gameDir, plan, manifest, deps = {}) {
   };
   const lkg = {
     route: plan ? plan.recommendedRoute : null,
+    exePath: deps.exePath || (manifest?.game?.exe ? path.resolve(gameDir, manifest.game.exe) : null),
     loader: deps.loader || 'dxgi',
     componentVersions: componentVersionsFromPlan(plan),
     config: deps.config || {},
     dllHashes: deps.dllHashes || {},
     verifiedAt: null,
-    installedAt: now
+    installedAt: now,
+    logSnapshot: snapshotLogs(deps.exePath ? path.dirname(deps.exePath)
+      : manifest?.game?.exe ? path.dirname(path.resolve(gameDir, manifest.game.exe)) : gameDir)
   };
   const state = readGameState(gameDir, deps) || {};
   const history = state.installHistory || [];
@@ -177,9 +181,17 @@ function setVerifyState(gameDir, verifyState, extra = {}, deps = {}) {
 
 function recordVerification(gameDir, verification, deps = {}) {
   const state = readGameState(gameDir, deps);
-  if (!state || !state.pendingCandidate || state.verifyState === STATES.INSTALLING) return state;
+  if (!state || state.verifyState === STATES.INSTALLING) return state;
   const patch = { verifyState: verification.state, lastVerification: verification };
-  if (verification.verdict === 'SUCCESS' && verification.route === state.pendingCandidate.route) {
+  const current = state.pendingCandidate || state.lastKnownGood;
+  if (current && !current.logSnapshot && verification.verdict !== 'SUCCESS') {
+    // Older records get a baseline on their first inconclusive check. A later
+    // game session can be verified without reinstalling or trusting old logs.
+    const field = state.pendingCandidate ? 'pendingCandidate' : 'lastKnownGood';
+    patch[field] = { ...current, logSnapshot: snapshotLogs(deps.exePath ? path.dirname(deps.exePath)
+      : current.exePath ? path.dirname(current.exePath) : gameDir) };
+  }
+  if (state.pendingCandidate && verification.verdict === 'SUCCESS' && verification.route === state.pendingCandidate.route) {
     patch.lastKnownGood = { ...state.pendingCandidate, verifiedAt: new Date().toISOString() };
     patch.pendingCandidate = null;
   }

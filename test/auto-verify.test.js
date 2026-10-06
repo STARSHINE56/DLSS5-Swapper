@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const verifyMod = require('../src/automation/verify');
 const recovery = require('../src/automation/recovery');
+const { snapshotLogs } = require('../src/automation/runtime-logs');
 
 function temp(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-verify-'));
@@ -20,18 +21,17 @@ test('no logs yet means NOT_TESTED / waiting for the game', async t => {
   assert.equal(v.state, 'waiting_for_verification');
 });
 
-test('healthy route logs yield SUCCESS', async t => {
+test('delivered frames plus neural feature execution yield SUCCESS', async t => {
   const root = temp(t);
   fs.writeFileSync(path.join(root, 'ReShade.log'), [
     'ReShade runtime version: 6.4.1',
     'Loading and initializing add-ons...',
     'Loaded DLSS5 feed add-on',
-    'Initialized successfully'
+    'feature 18 created',
+    'evaluation succeeded'
   ].join('\n'));
   fs.writeFileSync(path.join(root, 'dlss5-feed.log'), [
-    'dlss5-feed host64 started',
-    'shader loaded',
-    'motion provider ready'
+    '[feed] frame 1 delivered (1920x1080, reset=0)'
   ].join('\n'));
   const v = verifyMod.verifyInstallation(root, { recommendedRoute: 'feeder' }, { exeDir: root });
   assert.equal(v.verdict, 'SUCCESS');
@@ -61,10 +61,11 @@ test('routine warning lines are not treated as failures', async t => {
   fs.writeFileSync(path.join(root, 'ReShade.log'), [
     'Warning: texture not found, skipping',
     'Loading and initializing add-ons...',
-    'Loaded DLSS5 feed add-on',
-    'Initialized successfully'
+    'Loaded renodx-dlss5.addon64',
+    'feature 18 created',
+    'evaluation succeeded'
   ].join('\n'));
-  const v = verifyMod.verifyInstallation(root, { recommendedRoute: 'feeder' }, { exeDir: root });
+  const v = verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }, { exeDir: root });
   assert.equal(v.verdict, 'SUCCESS');
 });
 
@@ -137,4 +138,95 @@ test('component status never trusts the file name alone', () => {
   assert.equal(renodx.status, 'CURRENT');
   const stale = recovery.componentStatus('D:\\x', { exePath: 'D:\\x\\game.exe', payload, files: { feeder: { version: '1.16.0' } } });
   assert.equal(stale.find(c => c.component === 'DLSS5-Feeder').status, 'OUTDATED');
+});
+
+test('generic add-on startup and feature-1 DLAA never prove neural rendering', t => {
+  const root = temp(t);
+  fs.writeFileSync(path.join(root, 'ReShade.log'), 'Loaded unrelated texture pack\nInitialized unrelated overlay');
+  for (const route of ['native', 'renodx', 'feeder', 'optiscaler']) {
+    assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: route }).verdict, 'PARTIAL');
+  }
+  fs.writeFileSync(path.join(root, 'ReShade.log'), 'Loaded renodx-dlss5.addon64\nfeature 1 created\nevaluation succeeded');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }).verdict, 'PARTIAL');
+});
+
+test('route identity plus feature-18 execution verifies only the matching route', t => {
+  const root = temp(t);
+  for (const [route, identity] of [['native', 'renodx-dlss5.addon64'], ['renodx', 'renodx-dlss.addon64'], ['optiscaler', 'OptiScaler']]) {
+    fs.writeFileSync(path.join(root, 'ReShade.log'), `Loaded ${identity}\nfeature 18 created\nevaluation succeeded`);
+    assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: route }).verdict, 'SUCCESS');
+    assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'feeder' }).verdict, 'PARTIAL');
+  }
+});
+
+test('warning-prefixed initialization failure is not suppressed', t => {
+  const root = temp(t);
+  fs.writeFileSync(path.join(root, 'ReShade.log'), 'Loaded renodx-dlss5.addon64\nfeature 18 created\nevaluation succeeded\nWarning: failed to initialize DLSS');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }).verdict, 'FAILED');
+});
+
+test('a fatal error beyond the old 64KB limit defeats earlier positive evidence', t => {
+  const root = temp(t);
+  fs.writeFileSync(path.join(root, 'ReShade.log'), 'Loaded renodx-dlss5.addon64\nfeature 18 created\nevaluation succeeded\n' + 'x'.repeat(70 * 1024) + '\nFatal: evaluate failed');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }).verdict, 'FAILED');
+});
+
+test('touching or appending unrelated messages cannot reuse pre-install success', t => {
+  const root = temp(t), file = path.join(root, 'ReShade.log');
+  fs.writeFileSync(file, 'Loaded renodx-dlss5.addon64\nfeature 18 created\nevaluation succeeded\n');
+  const logSnapshot = snapshotLogs(root), installedAt = new Date(Date.now() - 1000).toISOString();
+  fs.appendFileSync(file, 'New session: Loaded unrelated texture pack\nInitialized overlay\n');
+  const result = verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }, { installedAt, logSnapshot });
+  assert.equal(result.verdict, 'PARTIAL');
+  assert.equal(result.engaged, false);
+});
+
+test('a rotated log with a new neural session can still verify', t => {
+  const root = temp(t), file = path.join(root, 'ReShade.log');
+  fs.writeFileSync(file, 'old log'.repeat(100));
+  const logSnapshot = snapshotLogs(root);
+  fs.writeFileSync(file, 'Loaded renodx-dlss5.addon64\nfeature 18 created\nevaluation succeeded');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }, {
+    installedAt: new Date(Date.now() - 1000).toISOString(), logSnapshot
+  }).verdict, 'SUCCESS');
+});
+
+test('missing session baseline, unreadable or oversized logs cannot report success', t => {
+  const root = temp(t), file = path.join(root, 'ReShade.log');
+  fs.writeFileSync(file, 'Loaded renodx-dlss5.addon64\nfeature 18 created\nevaluation succeeded');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }, {
+    installedAt: new Date(Date.now() - 1000).toISOString()
+  }).verdict, 'PARTIAL');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }, {
+    logSnapshot: { 'ReShade.log': { unreadable: true } }
+  }).verdict, 'PARTIAL');
+  fs.appendFileSync(file, '\n' + 'x'.repeat(8 * 1024 * 1024));
+  const result = verifyMod.verifyInstallation(root, { recommendedRoute: 'native' });
+  assert.notEqual(result.verdict, 'SUCCESS');
+  assert.equal(result.logs[0].truncated, true);
+});
+
+test('32-bit host evidence is kept separate from the game process', t => {
+  const root = temp(t); fs.mkdirSync(path.join(root, 'host64'));
+  fs.writeFileSync(path.join(root, 'dlss5-feed.log'), '[feed] frame 1 delivered');
+  fs.writeFileSync(path.join(root, 'host64', 'ReShade.log'), 'feature 18 created\nevaluation succeeded');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'feeder' }).verdict, 'PARTIAL');
+  fs.writeFileSync(path.join(root, 'host64', 'dlss5-feed-host.log'), '[host] frame 1 evaluated (0 presents skipped)');
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'feeder' }).verdict, 'SUCCESS');
+});
+
+test('log instructions containing success keywords are not execution evidence', t => {
+  const root = temp(t);
+  fs.writeFileSync(path.join(root, 'ReShade.log'), "Loaded renodx-dlss5.addon64\ncheck the host log for 'feature 18 created' / 'evaluation succeeded'");
+  assert.equal(verifyMod.verifyInstallation(root, { recommendedRoute: 'native' }).verdict, 'PARTIAL');
+});
+
+test('dgVoodoo proxy repair requires a loader failure and is not offered twice', t => {
+  const root = temp(t), file = path.join(root, 'ReShade.log');
+  const detection = { exe: { api: 'd3d9' }, existingDlls: [{ kind: 'dgvoodoo' }] };
+  fs.writeFileSync(file, 'DLL Load Error');
+  assert.equal(verifyMod.diagnoseInstallation(root, { recommendedRoute: 'feeder' }, { detection }).repairId, 'fix-reshade-proxy');
+  assert.equal(verifyMod.diagnoseInstallation(root, { recommendedRoute: 'feeder' }, { detection, loader: 'd3d11' }).repairId, null);
+  fs.writeFileSync(file, 'Warning: failed to initialize DLSS');
+  assert.equal(verifyMod.diagnoseInstallation(root, { recommendedRoute: 'feeder' }, { detection }).repairId, null);
 });

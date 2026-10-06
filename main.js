@@ -2012,19 +2012,25 @@ ipcMain.handle('restore', (event, dir) => exclusiveMutation(async () => {
 // ---------------------------------------------------------------------------
 const automation = require('./src/automation');
 
+function detectAutomation(dir, exePath = null) {
+  return automation.detect({ gameDir: dir, exePath: exePath || null }, {
+    apiPreference: (_gameDir, exe) => apiPreference(loadState(), dir, exe)
+  });
+}
+
 // Read-only, cheap to recompute, safe to call while the sheet is open.
 ipcMain.handle('auto-detect', (event, dir, exePath) =>
-  automation.detect({ gameDir: dir, exePath: exePath || null }));
+  detectAutomation(dir, exePath));
 
 ipcMain.handle('auto-recommend', (event, dir, mode, exePath) => (async () => {
-  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  const detection = await detectAutomation(dir, exePath);
   return { detection, recommendation: automation.recommend(detection, mode || 'auto') };
 })());
 
 // Full smart picture for the sheet: detection + recommendation + plan +
 // preflight, so the UI has one round trip per refresh.
 ipcMain.handle('auto-plan', (event, dir, mode, exePath) => (async () => {
-  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  const detection = await detectAutomation(dir, exePath);
   const recommendation = automation.recommend(detection, mode || 'auto');
   const plan = automation.buildPlan(detection, recommendation, mode || 'auto');
   const preflight = automation.preflight(detection, recommendation, { payload: payload() });
@@ -2035,7 +2041,7 @@ ipcMain.handle('auto-install', (event, dir, mode, exePath) => exclusiveMutation(
   const userData = app.getPath('userData');
   const send = (e) => event.sender.send('job', e);
   const p = payload();
-  const detection = await automation.detect({ gameDir: dir, exePath: exePath || null });
+  const detection = await detectAutomation(dir, exePath);
   const recommendation = automation.recommend(detection, mode || 'auto');
   const plan = automation.buildPlan(detection, recommendation, mode || 'auto');
   // Reuse an existing d3d11 ReShade hook where present; the official sheet
@@ -2044,7 +2050,7 @@ ipcMain.handle('auto-install', (event, dir, mode, exePath) => exclusiveMutation(
     String(detection.reshade.file || '').toLowerCase() === 'd3d11.dll' ? 'd3d11' : 'dxgi';
   return automation.runInstall({ gameDir: dir, exePath: exePath || null, mode: mode || 'auto' }, {
     userData, send, payload: p, detection, recommendation, plan, loader,
-    install: async (config) => officialInstallFlow(event, dir, config.exePath, config.route, config.api, {
+    install: async (config) => officialInstallFlow(event, dir, config.exePath, config.route, config.apiChoice, {
       skipDialogs: true,
       reshadeProxy: config.reshadeProxy
     }),
@@ -2052,16 +2058,28 @@ ipcMain.handle('auto-install', (event, dir, mode, exePath) => exclusiveMutation(
   });
 }));
 
+function verifyAutomationRuntime(dir, detection, state, installed) {
+  if (!installed) return {
+    ok: true, verdict: 'NOT_TESTED', state: automation.STATES.NEEDS_ATTENTION,
+    route: null, gameDir: dir, engaged: false, fresh: false, evidenceComplete: false, logs: [],
+    findings: [{ severity: 'warn', log: 'install', message: '未找到当前安装记录，不能用旧日志确认组件仍在运行。' }]
+  };
+  const route = installed.route || detection.scan?.install?.route || state?.route || null;
+  return automation.verify(dir, { recommendedRoute: route }, {
+    exeDir: detection.exe ? path.dirname(detection.exe.path) : dir, route,
+    installedAt: (state?.pendingCandidate || state?.lastKnownGood)?.installedAt,
+    logSnapshot: (state?.pendingCandidate || state?.lastKnownGood)?.logSnapshot
+  });
+}
+
 async function automationVerify(dir) {
   const userData = app.getPath('userData');
-  const detection = await automation.detect({ gameDir: dir });
   const state = automation.state(dir, { userData });
-  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
-  const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
-  const verify = automation.verify(dir, { recommendedRoute: route }, {
-    exeDir, route, installedAt: state && state.pendingCandidate && state.pendingCandidate.installedAt
-  });
-  require('./src/automation/recovery').recordVerification(dir, verify, { userData });
+  const installed = backends.readManifest(dir);
+  const exePath = installed?.game?.exe ? journal.safePath(dir, installed.game.exe) : state?.pendingCandidate?.exePath;
+  const detection = await detectAutomation(dir, exePath);
+  const verify = verifyAutomationRuntime(dir, detection, state, installed);
+  require('./src/automation/recovery').recordVerification(dir, verify, { userData, exePath: detection.exe?.path });
   return verify;
 }
 
@@ -2069,26 +2087,29 @@ ipcMain.handle('auto-verify', (event, dir) => exclusiveMutation(() => automation
 
 ipcMain.handle('auto-diagnose', (event, dir) => (async () => {
   const userData = app.getPath('userData');
-  const detection = await automation.detect({ gameDir: dir });
   const state = automation.state(dir, { userData });
-  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
+  const installed = backends.readManifest(dir);
+  const exePath = installed?.game?.exe ? journal.safePath(dir, installed.game.exe) : state?.pendingCandidate?.exePath;
+  const detection = await detectAutomation(dir, exePath);
+  const route = installed?.route || detection.scan?.install?.route || state?.route || null;
   const exeDir = detection.exe ? path.dirname(detection.exe.path) : dir;
-  const verify = automation.verify(dir, { recommendedRoute: route }, { exeDir, route });
-  return automation.diagnose(dir, { recommendedRoute: route }, { exeDir, route, detection, verify });
+  const loader = state?.loader || (detection.reshade?.file?.toLowerCase() === 'd3d11.dll' ? 'd3d11' : 'dxgi');
+  const verify = verifyAutomationRuntime(dir, detection, state, installed);
+  return automation.diagnose(dir, { recommendedRoute: route }, { exeDir, route, detection, verify, loader });
 })());
 
 // Only reversible, low-risk repairs (see src/automation/verify.js).
 ipcMain.handle('auto-repair', (event, dir, repairId) => exclusiveMutation(async () => {
   const userData = app.getPath('userData');
-  const detection = await automation.detect({ gameDir: dir });
+  const detection = await detectAutomation(dir);
   const state = automation.state(dir, { userData });
-  const route = (state && state.route) || (detection.scan && detection.scan.installedRoute) || null;
+  const route = (state && state.route) || detection.scan?.install?.route || null;
   const loader = state && state.loader ? state.loader
     : (detection.reshade && detection.reshade.installed && String(detection.reshade.file || '').toLowerCase() === 'd3d11.dll' ? 'd3d11' : 'dxgi');
   return automation.repair(dir, repairId, {
     exePath: detection.exe ? detection.exe.path : null,
     route: route || 'native',
-    api: detection.exe ? detection.exe.api : 'auto'
+    api: detection.exe ? (detection.exe.apiOverride !== 'auto' ? detection.exe.apiOverride : detection.exe.api) : 'auto'
   }, {
     userData, loader,
     send: (e) => event.sender.send('job', e),
@@ -2101,11 +2122,11 @@ ipcMain.handle('auto-repair', (event, dir, repairId) => exclusiveMutation(async 
 
 ipcMain.handle('auto-restore-lkg', (event, dir) => exclusiveMutation(async () => {
   const userData = app.getPath('userData');
-  const detection = await automation.detect({ gameDir: dir });
+  const detection = await detectAutomation(dir);
   const send = (e) => event.sender.send('job', e);
   return automation.restoreLastKnownGood(dir, {
     exePath: detection.exe ? detection.exe.path : null,
-    api: detection.exe ? detection.exe.api : 'auto'
+    api: detection.exe ? (detection.exe.apiOverride !== 'auto' ? detection.exe.apiOverride : detection.exe.api) : 'auto'
   }, {
     userData,
     restore: async (d) => backends.restore(d, send),

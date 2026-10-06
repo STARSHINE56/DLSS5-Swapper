@@ -103,14 +103,18 @@ test('old game logs cannot verify a newly installed candidate', t => {
   assert.deepEqual(state().lastKnownGood, a);
 });
 
-test('fresh real game logs verify and promote the candidate', t => {
+test('new-session neural execution logs verify and promote the candidate', t => {
   const { gameDir, deps, state } = fixture(t);
   const log = path.join(gameDir, 'dlss5-feed.log');
-  fs.writeFileSync(log, 'dlss5-feed host64 started\nshader loaded');
+  fs.writeFileSync(log, '[feed] frame 1 delivered (1920x1080, reset=0)');
+  const neuralLog = path.join(gameDir, 'ReShade.log');
+  fs.writeFileSync(neuralLog, 'feature 18 created\nevaluation succeeded');
   const afterInstall = new Date(Date.parse(state().pendingCandidate.installedAt) + 1000);
   fs.utimesSync(log, afterInstall, afterInstall);
+  fs.utimesSync(neuralLog, afterInstall, afterInstall);
   const result = verify.verifyInstallation(gameDir, { recommendedRoute: 'feeder' }, {
-    installedAt: state().pendingCandidate.installedAt
+    installedAt: state().pendingCandidate.installedAt,
+    logSnapshot: state().pendingCandidate.logSnapshot
   });
   assert.equal(result.verdict, 'SUCCESS');
   recovery.recordVerification(gameDir, result, deps);
@@ -122,4 +126,34 @@ test('a different route cannot promote B', t => {
   const { gameDir, deps, state, a } = fixture(t);
   recovery.recordVerification(gameDir, { verdict: 'SUCCESS', route: 'native', state: 'working' }, deps);
   assert.deepEqual(state().lastKnownGood, a);
+});
+
+test('verification after promotion updates failure state without erasing the historical LKG', t => {
+  const { gameDir, deps, state } = fixture(t);
+  recovery.recordVerification(gameDir, { verdict: 'SUCCESS', route: 'feeder', state: 'working' }, deps);
+  const lkg = state().lastKnownGood;
+  recovery.recordVerification(gameDir, { verdict: 'FAILED', route: 'feeder', state: 'failed' }, deps);
+  assert.equal(state().verifyState, 'failed');
+  assert.equal(state().lastVerification.verdict, 'FAILED');
+  assert.deepEqual(state().lastKnownGood, lkg);
+});
+
+test('an older candidate establishes a baseline, then verifies only a new session', t => {
+  const { gameDir, deps, state } = fixture(t);
+  const candidate = { ...state().pendingCandidate }; delete candidate.logSnapshot;
+  recovery.patchGameState(gameDir, { pendingCandidate: candidate }, deps);
+  fs.writeFileSync(path.join(gameDir, 'dlss5-feed.log'), '[feed] frame 1 delivered\n');
+  fs.writeFileSync(path.join(gameDir, 'ReShade.log'), 'feature 18 created\nevaluation succeeded\n');
+  const afterInstall = new Date(Date.parse(candidate.installedAt) + 1000);
+  for (const name of ['dlss5-feed.log', 'ReShade.log']) fs.utimesSync(path.join(gameDir, name), afterInstall, afterInstall);
+  let result = verify.verifyInstallation(gameDir, { recommendedRoute: 'feeder' }, { installedAt: candidate.installedAt });
+  assert.equal(result.verdict, 'PARTIAL');
+  recovery.recordVerification(gameDir, result, deps);
+  assert.ok(state().pendingCandidate.logSnapshot);
+  assert.notEqual(state().lastKnownGood?.route, 'feeder');
+  fs.appendFileSync(path.join(gameDir, 'dlss5-feed.log'), '[feed] frame 2 delivered\n');
+  fs.appendFileSync(path.join(gameDir, 'ReShade.log'), 'feature 18 created\nevaluation succeeded\n');
+  for (const name of ['dlss5-feed.log', 'ReShade.log']) fs.utimesSync(path.join(gameDir, name), afterInstall, afterInstall);
+  result = verify.verifyInstallation(gameDir, { recommendedRoute: 'feeder' }, state().pendingCandidate);
+  assert.equal(result.verdict, 'SUCCESS');
 });

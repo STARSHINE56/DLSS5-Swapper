@@ -35,6 +35,10 @@ function preflightCheck(detection, recommendation, deps = {}) {
   // GPU - judged from detection, never from a recommendation the caller may
   // have hand-built.
   const gpu = detection.gpu || {};
+  if (detection.multiGpu) {
+    checks.push(fail('warn', 'multi-gpu', '检测到多张显卡；不能从列表顺序确认游戏使用的 GPU。'));
+    warnings.push('multi-gpu');
+  }
   if (!gpu.available) {
     checks.push(fail('fail', 'gpu', '未检测到 NVIDIA GPU（nvidia-smi 不可用）。'));
     errors.push('gpu');
@@ -46,6 +50,9 @@ function preflightCheck(detection, recommendation, deps = {}) {
     warnings.push('gpu');
   } else if (gpu.driverNumber != null && gpu.driverNumber < 61656) {
     checks.push(fail('warn', 'driver', `NVIDIA 驱动 ${gpu.driver} 低于 616.56；神经网络渲染可能无法初始化。`));
+    warnings.push('driver');
+  } else if (gpu.driverNumber == null) {
+    checks.push(fail('warn', 'driver', '驱动版本未知，不能确认驱动兼容性。'));
     warnings.push('driver');
   } else {
     checks.push(fail('pass', 'gpu', gpu.primary ? `${gpu.primary.name} — ${gpu.driver}` : 'GPU 正常'));
@@ -59,7 +66,9 @@ function preflightCheck(detection, recommendation, deps = {}) {
     checks.push(fail('fail', 'api', '渲染 API 未知；请在高级设置中手动选择。'));
     errors.push('api');
   } else {
-    checks.push(fail('pass', 'api', `${detection.exe.apiLabel}（${detection.exe.via || '检测'}）`));
+    const status = detection.apiConfidence === 'HIGH' ? 'pass' : 'warn';
+    checks.push(fail(status, 'api', `${detection.exe.apiLabel}（${detection.exe.via || '检测'}）`));
+    if (status === 'warn') warnings.push('api');
   }
 
   // Anti-cheat
