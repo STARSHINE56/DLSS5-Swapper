@@ -953,6 +953,11 @@ function smartStateText(state) {
     needs_attention: t('smartNeedsAttention'), failed: t('smartFailed'), rolled_back: t('smartRolledBack') }[state] || state || '—');
 }
 
+function smartVerdictText(v) {
+  return ({ NOT_TESTED: t('smartNotTested'), SUCCESS: t('smartWorking'), PARTIAL: t('smartPartial'),
+    FAILED: t('smartFailed'), UNKNOWN: '未知' }[v] || v || '—');
+}
+
 function smartConfidenceHtml(c) {
   const tone = c === 'HIGH' ? 'on' : c === 'UNKNOWN' ? 'off' : '';
   const label = c === 'HIGH' ? t('smartConfidenceHigh')
@@ -1088,7 +1093,7 @@ async function runSmartAction(kind, dir) {
       const out = kind === 'verify' ? await window.lab.autoVerify(dir) : await window.lab.autoDiagnose(dir);
       if (kind === 'verify') renderSmartBody({ detection: out, recommendation: { blocked: false, recommendedRoute: out.route || null, confidence: 'HIGH', warnings: [], reasons: [], fallbackRoutes: [], optionalRoutes: [], multipass: 1 }, plan: { risk: 'low', components: [], replacements: [], conflicts: [], steps: [] }, state: { verifyState: out.state } }, dir);
       else renderDiagBody(out, dir);
-      if (out.verdict) jobLog('结果: ' + out.verdict);
+      if (out.verdict) jobLog('结果: ' + smartVerdictText(out.verdict));
     } catch (e) { jobLog(e.message); }
     return;
   }
