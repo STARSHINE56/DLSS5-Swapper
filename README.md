@@ -33,7 +33,7 @@ The upstream documentation below is retained, with download links pointing to th
 
 **Support upstream author / 支持原项目作者:** the Sponsor button and Buy Me a Coffee links support **rakanki911**, not the Starshine Auto fork author.
 
-### Starshine Auto 2.2.10
+### Starshine Auto 2.2.11
 
 Installation now records a pending candidate. Only successful game-log verification promotes it to Last Known Good; previous verified configurations survive untested or failed installs. Legacy unverified records are preserved as candidates. CI and tag builds validate tests, localization, package contents and SHA256 before publication.
 
