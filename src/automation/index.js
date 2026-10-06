@@ -54,7 +54,7 @@ module.exports = {
   normalizeMode,
   createLogger,
   outcome,
-  detect: (options) => detect.detectGame(options),
+  detect: (options, deps) => detect.detectGame(options, deps),
   recommend: (detection, mode) => compat.buildRecommendation(detection, mode),
   preflight: (detection, recommendation, deps) => plan.preflightCheck(detection, recommendation, deps),
   buildPlan: (detection, recommendation, mode) => plan.buildInstallPlan(detection, recommendation, mode),

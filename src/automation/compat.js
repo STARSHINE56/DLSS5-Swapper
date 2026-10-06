@@ -113,6 +113,13 @@ function buildRecommendation(detection, mode, deps = {}) {
       warnings.push(`NVIDIA 驱动 ${gpu.driver} 低于神经网络渲染推荐的 616.56。`);
       confidence = demote(confidence, CONFIDENCE.LOW);
     }
+  } else if (gpu.available && gpu.isNvidia) {
+    confidence = demote(confidence, CONFIDENCE.LOW);
+    warnings.push('无法读取 NVIDIA 驱动版本，不能确认驱动兼容性。');
+  }
+  if (detection.multiGpu) {
+    confidence = demote(confidence, CONFIDENCE.LOW);
+    warnings.push('检测到多张显卡，列表顺序不代表游戏使用的显卡；请先确认游戏的 GPU 设置。');
   }
 
   // --- API ---
@@ -122,14 +129,17 @@ function buildRecommendation(detection, mode, deps = {}) {
     confidence = CONFIDENCE.UNKNOWN;
     warnings.push('无法确定游戏的渲染 API。智能安装已停止；请在高级设置中手动选择 API。');
   } else {
+    confidence = demote(confidence, detection.apiConfidence || CONFIDENCE.UNKNOWN);
     reasons.push(`API: ${exe.apiLabel}（${exe.via || '检测'}）`);
+    if (exe.via === 'manual') warnings.push('当前 API 来自手动设置，请确认与游戏实际启用的渲染模式一致。');
+    else if (detection.apiConfidence !== CONFIDENCE.HIGH) warnings.push('渲染 API 仅由间接线索识别，请核对游戏设置后再安装。');
   }
 
   // --- Anti-cheat / competitive ---
   if (detection.antiCheat && detection.antiCheat.blocked) {
     blocked = true;
     blockReason = 'anti-cheat';
-    confidence = CONFIDENCE.LOW;
+    confidence = demote(confidence, CONFIDENCE.LOW);
     warnings.push('检测到反作弊系统。修改游戏 DLL 可能导致游戏无法启动或账号风险，智能安装已停止。');
   }
 
@@ -137,7 +147,7 @@ function buildRecommendation(detection, mode, deps = {}) {
   if (detection.managedModRoot) {
     blocked = true;
     blockReason = 'managed-modpack';
-    confidence = CONFIDENCE.LOW;
+    confidence = demote(confidence, CONFIDENCE.LOW);
     warnings.push('检测到 Mod Organizer Stock Game / Root Builder 安装；已阻止直接注入。');
   }
 
@@ -190,7 +200,7 @@ function buildRecommendation(detection, mode, deps = {}) {
   const reshade = reshadePresent(detection);
   if (reshade) reasons.push('已有 ReShade — 兼容时复用现有加载器');
 
-  const optiPossible = routes.includes('optiscaler') && gpu.isBlackwell && driver != null && driver >= MIN_DRIVER;
+  const optiPossible = !detection.multiGpu && routes.includes('optiscaler') && gpu.isBlackwell && driver != null && driver >= MIN_DRIVER;
   const presrPossible = optiPossible && (mode === 'quality' || mode === 'experimental');
 
   switch (mode) {

@@ -30,6 +30,7 @@ function buildSmartConfig(detection, recommendation, mode, deps = {}) {
     gameDir: detection.gameDir,
     exePath: exe.path,
     api,
+    apiChoice: exe.apiOverride && exe.apiOverride !== 'auto' ? exe.apiOverride : api,
     apiLabel: exe.apiLabel,
     bitness: exe.bitness,
     route,
@@ -134,7 +135,7 @@ async function runSmartInstall(options, deps = {}) {
   const added = result.added != null ? result.added : (manifest ? manifest.added.length : 0);
   const loader = deps.loader || 'dxgi';
   const dllHashes = result.dllHashes || {};
-  recovery.completeInstall(gameDir, plan, manifest, { userData, loader, dllHashes });
+  recovery.completeInstall(gameDir, plan, manifest, { userData, loader, dllHashes, exePath: detection.exe.path });
   log(gameDir, plan.recommendedRoute, mode, 'install', 'done', 'success', null);
   send({ code: 'autoInstalled', params: { route: plan.recommendedRoute, replaced, added } });
   return outcome(true, STATES.WAITING_FOR_VERIFICATION, 'autoInstalled', {

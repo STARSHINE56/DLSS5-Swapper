@@ -18,6 +18,7 @@ const pe = require('../core/pe');
 const apply = require('../core/apply');
 const guards = require('../core/install-guards');
 const compatibility = require('../core/compatibility');
+const renderingApi = require('../shared/rendering-api');
 const { safePath } = require('../core/file-journal');
 
 // Proxy names ReShade/OptiScaler/Special K register under, in the order they
@@ -188,7 +189,13 @@ async function detectGame(options, deps = {}) {
   const gameDir = options.gameDir;
   const scan = deps.scanGame ? await deps.scanGame(gameDir) : await (require('../core/scan').scanGame)(gameDir);
   const manifest = deps.readManifest ? deps.readManifest(gameDir) : readManifest(gameDir);
-  const picked = (scan.exeCandidates || []).find(e => e.path === options.exePath) || scan.chosen || null;
+  const detected = options.exePath
+    ? (scan.exeCandidates || []).find(e => e.path === options.exePath) || null
+    : scan.chosen || null;
+  const apiOverride = detected ? (deps.apiPreference
+    ? deps.apiPreference(gameDir, detected.path) : options.apiOverride || 'auto') : 'auto';
+  if (!renderingApi.valid(apiOverride)) throw Object.assign(new Error('errApiChoice'), { code: 'errApiChoice' });
+  const picked = detected ? renderingApi.effective(detected, apiOverride) : null;
 
   const result = {
     gameDir,
@@ -200,12 +207,16 @@ async function detectGame(options, deps = {}) {
       apiLabel: picked.apiLabel,
       bitness: picked.bitness,
       via: picked.via,
+      apiOverride,
+      detectedApi: detected.api,
+      detectedApiLabel: detected.apiLabel,
       emulator: picked.emulator || null,
       apiChoices: picked.apiChoices || []
     } : null,
-    apiConfidence: picked ? confidenceFor(picked.via) : 'UNKNOWN',
+    apiConfidence: picked ? (apiOverride === 'auto' ? confidenceFor(picked.via) : 'MEDIUM') : 'UNKNOWN',
     scan
   };
+  if (picked && apiOverride !== 'auto') result.exe.via = 'manual';
 
   // GPU + driver. nvidia-smi absence is a real answer too: no NVIDIA tooling
   // means the smart path cannot prove the card, and stays conservative.
@@ -217,7 +228,10 @@ async function detectGame(options, deps = {}) {
   const primary = gpuRows && gpuRows[0] ? { name: gpuRows[0].name, driver: gpuRows[0].driver } : null;
   const isNvidia = primary ? /nvidia|geforce|rtx|gtx|quadro|tesla/i.test(primary.name) : false;
   const isRtx = primary ? /\bRTX\b/i.test(primary.name) : false;
-  const isBlackwell = primary ? guards.gpuModelSupported(gpuRows) : false;
+  // All capabilities must describe the SAME reported card. Enumeration order
+  // is not proof of which GPU the game uses; keep other cards as evidence.
+  const primaryRows = primary ? [primary] : [];
+  const isBlackwell = guards.gpuModelSupported(primaryRows);
   const driverNumber = primary ? (() => {
     const m = /^(\d+)\.(\d+)/.exec(String(primary.driver || ''));
     return m ? Number(m[1]) * 100 + Number(m[2]) : null;
@@ -231,8 +245,8 @@ async function detectGame(options, deps = {}) {
     isBlackwell,
     driver: primary ? primary.driver : null,
     driverNumber,
-    driverSupported: guards.driverSupported(gpuRows || []),
-    modelSupported: guards.gpuModelSupported(gpuRows || [])
+    driverSupported: guards.driverSupported(primaryRows),
+    modelSupported: isBlackwell
   };
   result.multiGpu = Boolean(gpuRows && gpuRows.length > 1);
 
@@ -244,6 +258,7 @@ async function detectGame(options, deps = {}) {
   // ReShade / add-ons / mods.
   result.reshade = picked ? scan.reshade : null;
   result.mods = scanMods(gameDir, exeDir, result.reshade);
+  result.mods.push(...result.existingDlls.filter(dll => dll.kind === 'dgvoodoo'));
 
   // Anti-cheat and competitive risk. Detection blocks the smart path; the
   // manual install keeps its own consent dialog, untouched.
